@@ -1,5 +1,5 @@
 # Bitmaps2Video for Media Foundation
- A Delphi-class to encode a series of bitmaps together with an audio file to video using the Windows Mediafoundation-API.
+ A VCL-based Delphi-class to encode a series of bitmaps together with an audio file to video using the Windows Mediafoundation-API.
 
 The encoding class TBitmapEncoderWMF can be found in Source\uBitmaps2VideoWMF.pas. 
 It is designed to be an easy to use interface to the Mediafoundation-API, requiring only basic knowledge about video-processing.
