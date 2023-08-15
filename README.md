@@ -23,7 +23,7 @@ To see examples of usage, run the demo-project DemoWMF in the Demo-folder.
 Delphi-Versions:
 
 Developed under Delphi 11.3. Should work with 10.3 and up, probably with some earlier versions, too. 
-Extended records, anonymous procedures, interposer classes and TWicImage need to be available.
+Extended records, anonymous procedures, tasks, interposer classes and TWicImage need to be available.
 
 Runtime Requirement:
 
