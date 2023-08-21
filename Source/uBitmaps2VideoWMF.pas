@@ -844,10 +844,9 @@ procedure TBitmapEncoderWMF.AddStillImage(const bm: TBitmap; ShowTime: integer;
   crop: boolean);
 var
   bmBuf: TBitmap;
-
+  StartTime: int64;
 begin
-  var
-    StartTime: int64 := fWriteStart;
+  StartTime := fWriteStart;
   BitmapToRGBA(bm, fBmRGBA, crop);
   if fTimingDebug then
   begin
@@ -993,11 +992,11 @@ var
   pRow: PByte;
   StrideSource, StrideTarget: integer;
   pData: PByte;
+  time: string;
 begin
   if fTimingDebug then
   begin
-    var
-      time: string := IntToStr(fWriteStart div 10000000);
+      time := IntToStr(fWriteStart div 10000000);
     bm.Canvas.Lock;
     bm.Canvas.Brush.Style := bsClear;
     bm.Canvas.Font.Color := clFuchsia;

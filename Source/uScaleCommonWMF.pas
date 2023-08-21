@@ -525,7 +525,7 @@ var
   Weight: integer;
   Total: TBGRAInt;
   run: PBGRAInt;
-
+  jump: integer;
 begin
   miny := RTS.ContribsY[y].Min;
   highy := RTS.ContribsY[y].High;
@@ -569,8 +569,7 @@ begin
   pT := PBGRA(rT);
   inc(pT, RTS.xmin);
   run := CacheStart;
-  var
-    jump: integer := RTS.xminSource;
+    jump := RTS.xminSource;
 
   //Resample Cache-array horizontally into target row.
   //Total is the result for one pixel as TBGRAInt.
@@ -718,10 +717,11 @@ end;
 { TResamplingThreadPool }
 
 procedure TResamplingThreadPool.Finalize;
+var i: integer;
 begin
   if not Initialized then
     exit;
-  for var i: integer := 0 to Length(fResamplingThreads) - 1 do
+  for i := 0 to Length(fResamplingThreads) - 1 do
   begin
     fResamplingThreads[i].Terminate;
     fResamplingThreads[i].Wakeup.SetEvent;
@@ -735,6 +735,7 @@ end;
 
 procedure TResamplingThreadPool.Initialize(aMaxThreadCount: integer;
   aPriority: TThreadpriority);
+var i: integer;
 begin
   if Initialized then
     Finalize;
@@ -742,7 +743,7 @@ begin
   fThreadCount := max(aMaxThreadCount, 2);
   SetLength(fResamplingThreads, fThreadCount);
 
-  for var i: integer := 0 to Length(ResamplingThreads) - 1 do
+  for i := 0 to Length(ResamplingThreads) - 1 do
   begin
     fResamplingThreads[i] := TResamplingThread.Create;
     fResamplingThreads[i].Priority := aPriority;

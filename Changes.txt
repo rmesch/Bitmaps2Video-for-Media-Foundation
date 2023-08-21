@@ -2,3 +2,4 @@
 Video clips can now be inserted into the stream of bitmaps to be encoded to the video stream. 
 New methods CrossfadeTo and ZoomInOutTransitionTo, they do the transition from the last added frame to the target.
 Utility procedures GetVideoInfo and GetFrameBitmap in uTransformer.pas.
+Removed all inline variables for compatibility below 10.3.

@@ -24,7 +24,7 @@ To see examples of usage, run the demo-project DemoWMF in the Demo-folder.
 Delphi-Versions:
 
 Developed under Delphi 11.3. Should work with 10.3 and up, probably with some earlier versions, too. 
-Managed records, inline variables, anonymous procedures, interposer classes and TWicImage need to be available.
+Records with methods, anonymous procedures, interposer classes and TWicImage need to be available.
 
 Runtime Requirement:
 
