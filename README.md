@@ -1,7 +1,9 @@
 # Bitmaps2Video for Media Foundation
+
  A VCL-based Delphi-class to encode a series of bitmaps and video-clips together with an audio file to video using the Windows Mediafoundation-API.
 
-The encoding class TBitmapEncoderWMF can be found in Source\uBitmaps2VideoWMF.pas. It is designed to be an easy to use interface to the Mediafoundation-API, requiring only basic knowledge about video-processing.
+The encoding class TBitmapEncoderWMF can be found in Source\uBitmaps2VideoWMF.pas. 
+It is designed to be an easy to use interface to the Mediafoundation-API, requiring only basic knowledge about video-processing.
 
 Requires:
 
@@ -10,6 +12,7 @@ Download the repository and add its folder "src" to your library path. There is 
 * Thanks to FactoryXCode for the headers and samples! 
 
 Supported file formats and codecs:
+
 Presently only .mp4 with H264 or H265(HEVC)-codecs. Hardware encoding is enabled if supported. Audio is encoded to AAC.
 
 Usage:
