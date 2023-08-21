@@ -27,6 +27,8 @@ unit uScaleCommonWMF;
 
 interface
 
+{$WARN SYMBOL_PLATFORM OFF}
+
 uses System.Types, System.UITypes,
   System.Threading, System.SysUtils, System.Classes, System.Math,
   System.SyncObjs;
@@ -39,6 +41,8 @@ uses System.Types, System.UITypes,
 {$DEFINE Q_PLUS}
 {$Q-}
 {$ENDIF}
+
+
 
 type
   // Filter types

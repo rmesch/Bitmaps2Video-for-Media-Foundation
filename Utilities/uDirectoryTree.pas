@@ -5,6 +5,8 @@ unit uDirectoryTree;
 
 interface
 
+{$WARN SYMBOL_PLATFORM OFF}
+
 uses VCL.ComCtrls, VCL.Controls, System.Classes,
   System.Types, System.IOUtils, System.SysUtils;
 

@@ -134,6 +134,7 @@
         <DCCReference Include="..\Source\uScaleCommonWMF.pas"/>
         <DCCReference Include="..\Utilities\uDirectoryTree.pas"/>
         <DCCReference Include="..\Utilities\uToolsWMF.pas"/>
+        <DCCReference Include="..\Source\uTransformer.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
@@ -163,6 +164,18 @@
                 <DeployFile LocalName="Win32\Debug\DemoWMF.exe" Configuration="Debug" Class="ProjectOutput">
                     <Platform Name="Win32">
                         <RemoteName>DemoWMF.exe</RemoteName>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="Win64\Debug\DemoWMF.exe" Configuration="Debug" Class="ProjectOutput">
+                    <Platform Name="Win64">
+                        <RemoteName>DemoWMF.exe</RemoteName>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="Win64\Debug\DemoWMF.rsm" Configuration="Debug" Class="DebugSymbols">
+                    <Platform Name="Win64">
+                        <RemoteName>DemoWMF.rsm</RemoteName>
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>

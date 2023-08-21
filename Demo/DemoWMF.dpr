@@ -7,7 +7,8 @@ uses
   uScaleWMF in '..\Source\uScaleWMF.pas',
   uScaleCommonWMF in '..\Source\uScaleCommonWMF.pas',
   uDirectoryTree in '..\Utilities\uDirectoryTree.pas',
-  uToolsWMF in '..\Utilities\uToolsWMF.pas';
+  uToolsWMF in '..\Utilities\uToolsWMF.pas',
+  uTransformer in '..\Source\uTransformer.pas';
 
 {$R *.res}
 

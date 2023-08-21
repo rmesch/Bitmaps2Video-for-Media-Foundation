@@ -2,21 +2,22 @@ object DemoWMFMain: TDemoWMFMain
   Left = 0
   Top = 0
   Caption = 'DemoWMFMain'
-  ClientHeight = 522
-  ClientWidth = 860
+  ClientHeight = 561
+  ClientWidth = 900
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
   Font.Height = -12
   Font.Name = 'Segoe UI Semibold'
   Font.Style = []
+  Position = poDesktopCenter
   OnCreate = FormCreate
   OnDestroy = FormDestroy
   TextHeight = 15
   object Splitter1: TSplitter
-    Left = 241
+    Left = 225
     Top = 0
-    Height = 522
+    Height = 561
     ExplicitLeft = 200
     ExplicitTop = 200
     ExplicitHeight = 100
@@ -24,13 +25,13 @@ object DemoWMFMain: TDemoWMFMain
   object SettingsPanel: TPanel
     Left = 0
     Top = 0
-    Width = 241
-    Height = 522
+    Width = 225
+    Height = 561
     Align = alLeft
     TabOrder = 0
     DesignSize = (
-      241
-      522)
+      225
+      561)
     object Label2: TLabel
       Left = 8
       Top = 6
@@ -55,12 +56,13 @@ object DemoWMFMain: TDemoWMFMain
     object CodecInfo: TLabel
       Left = 8
       Top = 106
-      Width = 227
+      Width = 211
       Height = 79
       Anchors = [akLeft, akTop, akRight]
       AutoSize = False
       Caption = 'CodecInfo'
       WordWrap = True
+      ExplicitWidth = 227
     end
     object ShowWidth: TLabel
       Left = 8
@@ -78,15 +80,15 @@ object DemoWMFMain: TDemoWMFMain
     end
     object Label6: TLabel
       Left = 8
-      Top = 359
+      Top = 383
       Width = 138
       Height = 15
       Caption = 'Choose a frame rate [fps]: '
     end
     object OutputInfo: TLabel
-      Left = 0
+      Left = 3
       Top = 425
-      Width = 235
+      Width = 219
       Height = 57
       Alignment = taCenter
       Anchors = [akLeft, akTop, akRight]
@@ -94,6 +96,7 @@ object DemoWMFMain: TDemoWMFMain
       Caption = 'Output info'
       Layout = tlCenter
       WordWrap = True
+      ExplicitWidth = 235
     end
     object Label8: TLabel
       Left = 80
@@ -101,6 +104,13 @@ object DemoWMFMain: TDemoWMFMain
       Width = 107
       Height = 15
       Caption = 'Only .mp4 presently'
+    end
+    object Label13: TLabel
+      Left = 32
+      Top = 356
+      Width = 122
+      Height = 15
+      Caption = '(recommended: >=60)'
     end
     object FileExt: TComboBox
       Left = 8
@@ -163,7 +173,7 @@ object DemoWMFMain: TDemoWMFMain
       Top = 329
       Width = 145
       Height = 24
-      Increment = 5
+      Increment = 2
       MaxValue = 100
       MinValue = 10
       TabOrder = 4
@@ -171,7 +181,7 @@ object DemoWMFMain: TDemoWMFMain
     end
     object FrameRates: TComboBox
       Left = 8
-      Top = 380
+      Top = 404
       Width = 145
       Height = 23
       Style = csDropDownList
@@ -198,24 +208,24 @@ object DemoWMFMain: TDemoWMFMain
     end
   end
   object PagesPanel: TPanel
-    Left = 244
+    Left = 228
     Top = 0
-    Width = 616
-    Height = 522
+    Width = 672
+    Height = 561
     Align = alClient
     TabOrder = 1
     object StatusPanel: TPanel
       Left = 1
-      Top = 480
-      Width = 614
-      Height = 41
+      Top = 536
+      Width = 670
+      Height = 24
       Align = alBottom
       TabOrder = 0
       object Status: TLabel
         Left = 1
         Top = 1
-        Width = 612
-        Height = 39
+        Width = 668
+        Height = 22
         Align = alClient
         Alignment = taCenter
         Caption = 'Status'
@@ -233,10 +243,11 @@ object DemoWMFMain: TDemoWMFMain
     object PageControl1: TPageControl
       Left = 1
       Top = 1
-      Width = 614
-      Height = 479
+      Width = 670
+      Height = 535
       ActivePage = TabSheet1
       Align = alClient
+      MultiLine = True
       TabOrder = 1
       OnChange = PageControl1Change
       object TabSheet1: TTabSheet
@@ -258,7 +269,7 @@ object DemoWMFMain: TDemoWMFMain
         object Label9: TLabel
           Left = 0
           Top = 0
-          Width = 606
+          Width = 662
           Height = 44
           Align = alTop
           Alignment = taCenter
@@ -282,12 +293,12 @@ object DemoWMFMain: TDemoWMFMain
         end
       end
       object TabSheet2: TTabSheet
-        Caption = 'Make a Slideshow with Crossfade-Transitions'
+        Caption = 'Slideshow with Crossfade-Transitions'
         ImageIndex = 1
         object Splitter2: TSplitter
           Left = 313
           Top = 0
-          Height = 449
+          Height = 485
           ExplicitLeft = 320
           ExplicitTop = 168
           ExplicitHeight = 100
@@ -296,18 +307,18 @@ object DemoWMFMain: TDemoWMFMain
           Left = 0
           Top = 0
           Width = 313
-          Height = 449
+          Height = 485
           Align = alLeft
           TabOrder = 0
           object Splitter3: TSplitter
             Left = 1
-            Top = 211
+            Top = 247
             Width = 311
             Height = 3
             Cursor = crVSplit
             Align = alBottom
-            ExplicitTop = 26
-            ExplicitWidth = 188
+            ExplicitLeft = 0
+            ExplicitTop = 242
           end
           object Panel2: TPanel
             Left = 1
@@ -330,15 +341,13 @@ object DemoWMFMain: TDemoWMFMain
             Left = 1
             Top = 26
             Width = 311
-            Height = 185
+            Height = 221
             Align = alClient
             TabOrder = 1
-            ExplicitTop = 42
-            ExplicitHeight = 116
           end
           object Panel6: TPanel
             Left = 1
-            Top = 214
+            Top = 250
             Width = 311
             Height = 234
             Align = alBottom
@@ -359,27 +368,28 @@ object DemoWMFMain: TDemoWMFMain
         object Panel4: TPanel
           Left = 316
           Top = 0
-          Width = 290
-          Height = 449
+          Width = 346
+          Height = 485
           Align = alClient
           TabOrder = 1
           DesignSize = (
-            290
-            449)
+            346
+            485)
           object ImageCount: TLabel
             Left = 1
             Top = 1
-            Width = 288
-            Height = 40
+            Width = 344
+            Height = 15
             Align = alTop
             Alignment = taCenter
             Caption = 'ImageCount'
             Layout = tlCenter
+            ExplicitWidth = 66
           end
           object Panel5: TPanel
             Left = 1
             Top = 48
-            Width = 288
+            Width = 344
             Height = 400
             Anchors = [akLeft, akTop, akRight]
             TabOrder = 0
@@ -510,6 +520,190 @@ object DemoWMFMain: TDemoWMFMain
               TabOrder = 8
             end
           end
+        end
+      end
+      object TabSheet3: TTabSheet
+        Caption = 'Video from Images and a Video Clip'
+        ImageIndex = 2
+        object StartImageFile: TLabel
+          Left = 152
+          Top = 24
+          Width = 77
+          Height = 15
+          Caption = 'StartImageFile'
+        end
+        object EndImageFile: TLabel
+          Left = 152
+          Top = 68
+          Width = 72
+          Height = 15
+          Caption = 'EndImageFile'
+        end
+        object VideoClipFile: TLabel
+          Left = 152
+          Top = 113
+          Width = 69
+          Height = 15
+          Caption = 'VideoClipFile'
+        end
+        object AudioFileName: TLabel
+          Left = 152
+          Top = 156
+          Width = 82
+          Height = 15
+          Caption = 'AudioFileName'
+        end
+        object Label14: TLabel
+          AlignWithMargins = True
+          Left = 3
+          Top = 399
+          Width = 656
+          Height = 83
+          Align = alBottom
+          Alignment = taCenter
+          AutoSize = False
+          Caption = 
+            'Demo for inserting a video-clip into the series of bitmaps to be' +
+            ' encoded. Only the video -stream will be inserted, the audio-fil' +
+            'e plays while the video is shown.  If you pick the video again a' +
+            's audio-file, the video-audio gets encoded. You can optionally m' +
+            'ake a crossfade transition from the last bitmap-frame added to t' +
+            'he first video-frame. See TBitmapEncoderWMF.AddVideo. As far as ' +
+            'can be seen, any video which Windows Films & TV can play can be ' +
+            'inserted. The decoder needs to be installed in Windows.'
+          ShowAccelChar = False
+          Layout = tlCenter
+          WordWrap = True
+        end
+        object Label15: TLabel
+          Left = 8
+          Top = 235
+          Width = 106
+          Height = 15
+          Caption = 'Info for input video:'
+        end
+        object FrameBox: TPaintBox
+          Left = 296
+          Top = 267
+          Width = 266
+          Height = 126
+          OnPaint = FrameBoxPaint
+        end
+        object Label16: TLabel
+          Left = 8
+          Top = 253
+          Width = 172
+          Height = 15
+          Caption = '(see uTransformer.GetVideoInfo)'
+        end
+        object Label17: TLabel
+          Left = 296
+          Top = 235
+          Width = 95
+          Height = 15
+          Caption = 'Video Thumbnail:'
+        end
+        object Label18: TLabel
+          Left = 296
+          Top = 253
+          Width = 190
+          Height = 15
+          Caption = '(see uTransformer.GetFrameBitmap)'
+        end
+        object PickStartImage: TButton
+          Left = 8
+          Top = 21
+          Width = 137
+          Height = 25
+          Caption = 'Pick start-image'
+          TabOrder = 0
+          OnClick = PickStartImageClick
+        end
+        object PickEndImage: TButton
+          Left = 8
+          Top = 64
+          Width = 137
+          Height = 25
+          Caption = 'Pick end image'
+          TabOrder = 1
+          OnClick = PickEndImageClick
+        end
+        object PickVideo: TButton
+          Left = 8
+          Top = 109
+          Width = 137
+          Height = 25
+          Caption = 'Pick video clip'
+          TabOrder = 2
+          OnClick = PickVideoClick
+        end
+        object CombineToVideo: TButton
+          Left = 8
+          Top = 196
+          Width = 137
+          Height = 25
+          Caption = 'Combine to video'
+          TabOrder = 3
+          OnClick = CombineToVideoClick
+        end
+        object PickAudio: TButton
+          Left = 8
+          Top = 152
+          Width = 137
+          Height = 25
+          Caption = 'Pick audio'
+          TabOrder = 4
+          OnClick = PickAudioClick
+        end
+        object Memo1: TMemo
+          Left = 8
+          Top = 267
+          Width = 185
+          Height = 126
+          Lines.Strings = (
+            'Memo1')
+          TabOrder = 5
+        end
+        object FrameNo: TSpinEdit
+          Left = 568
+          Top = 326
+          Width = 64
+          Height = 24
+          Increment = 10
+          MaxValue = 10000
+          MinValue = 1
+          TabOrder = 6
+          Value = 1
+          OnChange = FrameNoChange
+        end
+      end
+      object TabSheet4: TTabSheet
+        Caption = 'Use TBitmapEncoderWMF as a transcoder'
+        ImageIndex = 3
+        object TranscoderInput: TLabel
+          Left = 136
+          Top = 36
+          Width = 87
+          Height = 15
+          Caption = 'TranscoderInput'
+        end
+        object Button1: TButton
+          Left = 16
+          Top = 32
+          Width = 105
+          Height = 25
+          Caption = 'Pick input video'
+          TabOrder = 0
+          OnClick = Button1Click
+        end
+        object Button3: TButton
+          Left = 16
+          Top = 72
+          Width = 105
+          Height = 25
+          Caption = 'Transcode'
+          TabOrder = 1
+          OnClick = Button3Click
         end
       end
     end
@@ -744,8 +938,8 @@ object DemoWMFMain: TDemoWMFMain
               DFBEEB01F8EF0100975C921D62A65E700000000049454E44AE426082}
           end>
       end>
-    Left = 256
-    Top = 96
+    Left = 208
+    Top = 112
   end
   object VirtualImageList1: TVirtualImageList
     Images = <
@@ -755,27 +949,69 @@ object DemoWMFMain: TDemoWMFMain
         Name = 'folder_open_64_h'
       end>
     ImageCollection = ImageCollection1
-    Left = 256
+    Left = 216
     Top = 152
   end
-  object FOD: TFileOpenDialog
+  object FODAudio: TFileOpenDialog
     FavoriteLinks = <>
     FileName = 'D:\DelphiSource\DelphiRio\mystuffR\Bitmaps2Video\EncoderClassWin'
     FileTypes = <
       item
-        DisplayName = 'Audio files (*.wav;*.mp3;*.aac)'
-        FileMask = '*.wav;*.mp3;*.aac'
+        DisplayName = 'Audio files (*.wav;*.mp3;*.aac;*.wma)'
+        FileMask = '*.wav;*.mp3;*.aac;*.wma'
+      end
+      item
+        DisplayName = 'Audio- and video-files'
+        FileMask = '*.wav;*.mp3;*.aac;*.wma;*.avi;*.mp4;*.mpg;*.mkv;*.vob'
+      end
+      item
+        DisplayName = 'Any'
+        FileMask = '*.*'
       end>
+    FileTypeIndex = 2
     Options = []
     Title = 'Choose an audio file.'
-    Left = 258
-    Top = 229
+    Left = 210
+    Top = 205
   end
   object OD: TFileOpenDialog
     FavoriteLinks = <>
     FileTypes = <>
     Options = [fdoPickFolders, fdoPathMustExist]
-    Left = 258
-    Top = 309
+    Left = 210
+    Top = 261
+  end
+  object FODPic: TFileOpenDialog
+    FavoriteLinks = <>
+    FileTypes = <
+      item
+        DisplayName = 'All supported'
+        FileMask = '*.bmp;*.jpg;*.png;*.gif'
+      end
+      item
+        DisplayName = 'All'
+        FileMask = '*.*'
+      end>
+    Options = []
+    Left = 209
+    Top = 315
+  end
+  object FODVideo: TFileOpenDialog
+    FavoriteLinks = <>
+    FileName = 
+      'D:\DelphiSource\DelphiRio\othstuffR\MfPack-Master\MfPack\Samples' +
+      '\Simple Player'
+    FileTypes = <
+      item
+        DisplayName = 'All supported'
+        FileMask = '*.avi;*.mp4;*.mkv;*.mpg;*.wmv;*.vob'
+      end
+      item
+        DisplayName = 'All'
+        FileMask = '*.*'
+      end>
+    Options = []
+    Left = 209
+    Top = 371
   end
 end
