@@ -15,6 +15,7 @@ Supported file formats and codecs:
 
 Output:  
 Presently only .mp4 with H264 or H265(HEVC)-codecs. Hardware encoding is enabled if supported. Audio is encoded to AAC.
+
 Input:  
 Theoretically anything that Windows has a decoder for should work as input for video or audio. Exception: Audio sample
 rate must be 44100 or 48000. Practically some file formats (like .vob) don't seem to be fully supported. Try them
