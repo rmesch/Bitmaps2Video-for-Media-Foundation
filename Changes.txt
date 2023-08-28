@@ -1,3 +1,10 @@
+2023-08-28
+Rework of audio input. 
+Fixed memory leaks (please report if memory consumption still keeps increasing).
+Those leaks could not be detected by the Delphi memory manager. Could be they occurred in the graphics-driver, could be
+one of the MF-Dlls is leaky. Fixed by reading up on Stackoverflow and by trial and error.
+Tackled audio-sync issues on playback on devices not controlled by Windows. Mostly fixed (famous last words).
+
 2023-08-21
 Video clips can now be inserted into the stream of bitmaps to be encoded to the video stream. 
 New methods CrossfadeTo and ZoomInOutTransitionTo, they do the transition from the last added frame to the target.

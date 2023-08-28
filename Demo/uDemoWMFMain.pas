@@ -130,6 +130,10 @@ type
     Button1: TButton;
     TranscoderInput: TLabel;
     Button3: TButton;
+    CheckBox1: TCheckBox;
+    Memo2: TMemo;
+    Label19: TLabel;
+    Button4: TButton;
 
     // Important procedure showing the use of TBitmapEncoderWMF
     procedure WriteAnimationClick(Sender: TObject);
@@ -148,11 +152,15 @@ type
     procedure PickEndImageClick(Sender: TObject);
     procedure PickVideoClick(Sender: TObject);
     procedure PickAudioClick(Sender: TObject);
+
+    // Important procedure showing the use of TBitmapEncoderWMF
     procedure CombineToVideoClick(Sender: TObject);
+
     procedure FrameNoChange(Sender: TObject);
     procedure FrameBoxPaint(Sender: TObject);
     procedure Button1Click(Sender: TObject);
     procedure Button3Click(Sender: TObject);
+    procedure Button4Click(Sender: TObject);
   private
     fDirectoryTree: TDirectoryTree;
     fFileList: TStringlist;
@@ -160,6 +168,7 @@ type
     fCodecList: TCodecIdArray;
     fWriting: boolean;
     fFramebm: TBitmap;
+    fUserAbort: boolean;
     function GetOutputFileName: string;
     procedure DoUpdate(var msg: TMessage); message MsgUpdate;
     procedure DirectoryTreeChange(Sender: TObject; node: TTreeNode);
@@ -182,7 +191,9 @@ type
     function GetAudioStart: int64;
     function GetAudioDialog: boolean;
     procedure FileBoxSelChange(Sender: TObject);
-    procedure TransCodeProgress(sender: TObject; FrameCount: Cardinal; VideoTime: int64);
+    procedure TransCodeProgress(Sender: TObject; FrameCount: Cardinal;
+      VideoTime: int64; var DoAbort: boolean);
+    procedure DisplayVideoInfo(const aMemo: TMemo; const VideoInfo: TVideoInfo);
     { Private-Deklarationen }
   public
     // properties which read the input parameters for the bitmap-encoder
@@ -280,73 +291,78 @@ begin
     ShowMessage('Encoding in progress, wait until finished.');
     exit;
   end;
-  h := VideoHeight;
-  w := VideoWidth;
-  Preview.Width := round(Aspect * Preview.Height);
-  StopWatch := TStopWatch.Create;
-  bme := TBitmapEncoderWMF.Create;
+  fWriting := true;
   try
-    // Initialize the bitmap-encoder
-    bme.Initialize(OutputFileName, w, h, Quality, FrameRate,
-      fCodecList[Codecs.ItemIndex], cfBicubic);
-    bm := TBitmap.Create;
+    h := VideoHeight;
+    w := VideoWidth;
+    Preview.Width := round(Aspect * Preview.Height);
+    StopWatch := TStopWatch.Create;
+    bme := TBitmapEncoderWMF.Create;
     try
-      // AntiAlias 2*Video-Height
-      bm.SetSize(2 * w, 2 * h);
-      xCenter := bm.Width div 2;
-      yCenter := bm.Height div 2;
-      scale := bm.Height / 4;
+      // Initialize the bitmap-encoder
+      bme.Initialize(OutputFileName, w, h, Quality, FrameRate,
+        fCodecList[Codecs.ItemIndex], cfBicubic);
+      bm := TBitmap.Create;
+      try
+        // AntiAlias 2*Video-Height
+        bm.SetSize(2 * w, 2 * h);
+        xCenter := bm.Width div 2;
+        yCenter := bm.Height div 2;
+        scale := bm.Height / 4;
 
-      bm.Canvas.brush.color := clMaroon;
-      bm.Canvas.pen.color := clYellow;
-      bm.Canvas.pen.Width := Max(h div 180, 2);
+        bm.Canvas.brush.color := clMaroon;
+        bm.Canvas.pen.color := clYellow;
+        bm.Canvas.pen.Width := Max(h div 180, 2);
 
-      dtheta := 2 / 150 * pi;
-      StopWatch.Start;
-      // Draw a sequence of spirals
-      for i := 0 to 200 do
-      begin
-        A := 1 - 1 / 210 * i;
-        jmax := trunc(10 / A / dtheta);
-        SetLength(points, jmax);
-        theta := 0;
-        for j := 0 to jmax - 1 do
+        dtheta := 2 / 150 * pi;
+        StopWatch.Start;
+        // Draw a sequence of spirals
+        for i := 0 to 200 do
         begin
-          r := dist(A * theta);
-          points[j] := map(Pointf(r * cos(theta), r * sin(theta)));
-          theta := theta + dtheta;
-        end;
-        bm.Canvas.Fillrect(bm.Canvas.clipRect);
-        bm.Canvas.PolyLine(points);
+          A := 1 - 1 / 210 * i;
+          jmax := trunc(10 / A / dtheta);
+          SetLength(points, jmax);
+          theta := 0;
+          for j := 0 to jmax - 1 do
+          begin
+            r := dist(A * theta);
+            points[j] := map(Pointf(r * cos(theta), r * sin(theta)));
+            theta := theta + dtheta;
+          end;
+          bm.Canvas.Fillrect(bm.Canvas.clipRect);
+          bm.Canvas.PolyLine(points);
 
-        bme.AddFrame(bm, false);
+          bme.AddFrame(bm, false);
 
-        Status.Caption := 'Frame ' + (i + 1).ToString;
-        Status.Repaint;
-        if i mod 10 = 1 then
-        begin
-          pre := TBitmap.Create;
-          try
-            uScaleWMF.Resample(Preview.Width, Preview.Height, bm, pre,
-              cfBilinear, 0, true, amIgnore);
-            BitBlt(Preview.Canvas.Handle, 0, 0, pre.Width, pre.Height,
-              pre.Canvas.Handle, 0, 0, SRCCopy);
-          finally
-            pre.Free;
+          Status.Caption := 'Frame ' + (i + 1).ToString;
+          Status.Repaint;
+          if i mod 10 = 1 then
+          begin
+            pre := TBitmap.Create;
+            try
+              uScaleWMF.Resample(Preview.Width, Preview.Height, bm, pre,
+                cfBilinear, 0, true, amIgnore);
+              BitBlt(Preview.Canvas.Handle, 0, 0, pre.Width, pre.Height,
+                pre.Canvas.Handle, 0, 0, SRCCopy);
+            finally
+              pre.Free;
+            end;
           end;
         end;
+        StopWatch.Stop;
+        Status.Caption := 'Writing speed including drawing to canvas: ' +
+          FloatToStrF(bme.FrameCount * 1000 / StopWatch.ElapsedMilliseconds,
+          ffFixed, 5, 2) + ' fps';
+      finally
+        bm.Free;
       end;
-      StopWatch.Stop;
-      Status.Caption := 'Writing speed including drawing to canvas: ' +
-        FloatToStrF(bme.FrameCount * 1000 / StopWatch.ElapsedMilliseconds,
-        ffFixed, 5, 2) + ' fps';
-    finally
-      bm.Free;
-    end;
-    bme.Finalize;
+      bme.Finalize;
 
+    finally
+      bme.Free;
+    end;
   finally
-    bme.Free;
+    fWriting := false;
   end;
 end;
 
@@ -530,81 +546,96 @@ begin
     ShowMessage('Encoding in progress, wait until finished.');
     exit;
   end;
-  if not FileExists(AudioFileName.Caption) then
-    af := ''
-  else
-    af := AudioFileName.Caption;
-  proceed := FileExists(StartImageFile.Caption) and
-    FileExists(EndImageFile.Caption) and FileExists(VideoClipFile.Caption);
-  proceed := proceed and (VideoClipFile.Caption <> OutputFileName);
-  if not proceed then
-  begin
-    ShowMessage
-      ('Pick valid files for the images and the video clip first. The output filename cannot be identical to the video clip name.');
-    exit;
-  end;
-  StopWatch:=TStopWatch.Create;
-  bme := TBitmapEncoderWMF.Create;
+  fWriting := true;
   try
-    StopWatch.Start;
-    Status.Caption := 'Working';
-    try
-      bme.Initialize(OutputFileName, VideoWidth, VideoHeight, Quality,
-        FrameRate, TCodecID(Codecs.ItemIndex), cfBicubic, af, 128, 44100, 9000);
-    except
-      on eAudioFormatException do
-      begin
-        ShowMessage('The format of the audio file is not supported.');
-        exit;
-      end
-      else
-        raise;
+    if not FileExists(AudioFileName.Caption) then
+      af := ''
+    else
+      af := AudioFileName.Caption;
+    proceed := FileExists(StartImageFile.Caption) and
+      FileExists(EndImageFile.Caption) and FileExists(VideoClipFile.Caption);
+    proceed := proceed and (VideoClipFile.Caption <> OutputFileName);
+    if not proceed then
+    begin
+      ShowMessage
+        ('Pick valid files for the images and the video clip first. The output filename cannot be identical to the video clip name.');
+      exit;
     end;
-    wic := TWicImage.Create;
-    bm := TBitmap.Create;
+    StopWatch := TStopWatch.Create;
+    bme := TBitmapEncoderWMF.Create;
     try
-      wic.LoadFromFile(StartImageFile.Caption);
-      WicToBmp(wic, bm);
-      Status.Caption := 'Start Image';
-      bme.AddStillImage(bm, 5000, false);
-      Status.Caption := 'Video Clip';
+      StopWatch.Start;
+      Status.Caption := 'Working';
       try
-        bme.OnProgress:=TransCodeProgress;
-        bme.AddVideo(VideoClipFile.Caption, 4000);
+        bme.Initialize(OutputFileName, VideoWidth, VideoHeight, Quality,
+          FrameRate, TCodecID(Codecs.ItemIndex), cfBicubic, af, 128,
+          44100, 9000);
       except
-        on EVideoFormatException do
+        on eAudioFormatException do
         begin
-          ShowMessage('Video format of ' + VideoClipFile.Caption +
-            ' is not supported.');
+          ShowMessage('The format of the audio file is not supported.');
           exit;
         end
         else
           raise;
       end;
-      wic.LoadFromFile(EndImageFile.Caption);
-      WicToBmp(wic, bm);
-      bme.OnProgress:=nil;
-      Status.Caption := 'End Image';
-      bme.CrossFadeTo(bm, 4000, false);
-      bme.AddStillImage(bm, 5000, false);
+      wic := TWicImage.Create;
+      bm := TBitmap.Create;
+      try
+        wic.LoadFromFile(StartImageFile.Caption);
+        WicToBmp(wic, bm);
+        Status.Caption := 'Start Image';
+        bme.AddStillImage(bm, 5000, false);
+        Status.Caption := 'Video Clip';
+        try
+          bme.OnProgress := TransCodeProgress;
+          bme.AddVideo(VideoClipFile.Caption, 4000);
+        except
+          on EVideoFormatException do
+          begin
+            ShowMessage('Video format of ' + VideoClipFile.Caption +
+              ' is not supported.');
+            exit;
+          end
+          else
+            raise;
+        end;
+        wic.LoadFromFile(EndImageFile.Caption);
+        WicToBmp(wic, bm);
+        bme.OnProgress := nil;
+        Status.Caption := 'End Image';
+        bme.CrossFadeTo(bm, 4000, false);
+        bme.AddStillImage(bm, 5000, false);
+      finally
+        bm.Free;
+        wic.Free;
+      end;
+      StopWatch.Stop;
+      fps := 1000 * bme.FrameCount / StopWatch.ElapsedMilliseconds;
     finally
-      bm.Free;
-      wic.Free;
+      // destroy finalizes
+      bme.Free;
     end;
-    StopWatch.Stop;
-    fps:=1000*bme.FrameCount/StopWatch.ElapsedMilliseconds;
+    Status.Caption := 'Writing speed: ' + FloatToStrF(fps, ffFixed, 5,
+      2) + ' fps';
   finally
-    // destroy finalizes
-    bme.Free;
+    fWriting := false;
   end;
-  Status.Caption := 'Writing speed: '+FloatToStrF(fps,ffFixed,5,2)+' fps';
 end;
 
 procedure TDemoWMFMain.Button1Click(Sender: TObject);
+var
+  VideoInfo: TVideoInfo;
 begin
   if not FODVideo.Execute then
-  exit;
-  TranscoderInput.Caption:=FODVideo.FileName;
+    exit;
+  TranscoderInput.Caption := FODVideo.FileName;
+  try
+    VideoInfo := GetVideoInfo(FODVideo.FileName);
+  except
+    ShowMessage('Format of input file not supported');
+  end;
+  DisplayVideoInfo(Memo2, VideoInfo);
 end;
 
 procedure TDemoWMFMain.Button2Click(Sender: TObject);
@@ -614,22 +645,47 @@ begin
   fDirectoryTree.NewRootFolder(OD.FileName);
 end;
 
-
-procedure TDemoWMFMain.TransCodeProgress(sender: TObject;FrameCount: Cardinal; VideoTime: int64);
-var min, sec: integer;
+procedure TDemoWMFMain.TransCodeProgress(Sender: TObject; FrameCount: Cardinal;
+VideoTime: int64; var DoAbort: boolean);
+var
+  min, sec: integer;
 begin
-  sec:=VideoTime div 1000;
-  min:=sec div 60;
-  sec:=sec mod 60;
-  Status.Caption:='Encoding time: '+min.ToString+':'+sec.ToString;
-  Status.Repaint;
+  sec := VideoTime div 1000;
+  min := sec div 60;
+  sec := sec mod 60;
+  Status.Caption := 'Encoding time-stamp: ' + min.ToString + ':' + sec.ToString;
+  Status.Invalidate;
+  Application.ProcessMessages;
+  DoAbort := fUserAbort;
 end;
 
 procedure TDemoWMFMain.Button3Click(Sender: TObject);
 begin
-  Status.Caption:='Working, please wait';
-  TranscodeVideoFile(TranscoderInput.Caption,OutputFileName,TCodecId(Codecs.ItemIndex),Quality,VideoWidth,VideoHeight,FrameRate,TransCodeProgress);
-  Status.Caption:='Done';
+  if fWriting then
+  begin
+    ShowMessage('Encoding in progress, wait until finished.');
+    exit;
+  end;
+  fWriting := true;
+  try
+    Status.Caption := 'Working, please wait';
+    fUserAbort := false;
+    TranscodeVideoFile(TranscoderInput.Caption, OutputFileName,
+      TCodecID(Codecs.ItemIndex), Quality, VideoWidth, VideoHeight, FrameRate,
+      CheckBox1.Checked, TransCodeProgress);
+    if fUserAbort then
+      Status.Caption := 'Aborted'
+    else
+      Status.Caption := 'Done';
+  finally
+    fWriting := false;
+    fUserAbort := false;
+  end;
+end;
+
+procedure TDemoWMFMain.Button4Click(Sender: TObject);
+begin
+  fUserAbort := true;
 end;
 
 procedure TDemoWMFMain.PickAudioClick(Sender: TObject);
@@ -656,7 +712,6 @@ begin
   FileBox.SelectAll;
   FileBoxSelChange(nil);
 end;
-
 
 procedure TDemoWMFMain.FileBoxSelChange(Sender: TObject);
 begin
@@ -702,32 +757,33 @@ begin
   HeightsChange(nil);
   CodecsChange(nil);
   FileBox.OnSelChange := FileBoxSelChange;
-  fFrameBm:=TBitmap.Create;
-  FrameBox.ControlStyle:=FrameBox.ControlStyle+[csOpaque];
+  fFramebm := TBitmap.Create;
+  FrameBox.ControlStyle := FrameBox.ControlStyle + [csOpaque];
   Randomize;
 end;
 
 procedure TDemoWMFMain.FormDestroy(Sender: TObject);
 begin
   fFileList.Free;
-  fFrameBm.Free;
+  fFramebm.Free;
 end;
 
 procedure TDemoWMFMain.FrameBoxPaint(Sender: TObject);
 begin
-  BitBlt(FrameBox.Canvas.Handle,0,0,fFrameBm.Width,fFrameBm.Height,fFrameBm.Canvas.Handle,0,0,SrcCopy);
+  BitBlt(FrameBox.Canvas.Handle, 0, 0, fFramebm.Width, fFramebm.Height,
+    fFramebm.Canvas.Handle, 0, 0, SRCCopy);
 end;
 
 procedure TDemoWMFMain.FrameNoChange(Sender: TObject);
 begin
   if FileExists(VideoClipFile.Caption) then
   begin
-      if GetFrameBitmap(VideoClipFile.Caption, fFramebm, FrameBox.Height,
-        FrameNo.Value) then
-      begin
-        FrameBox.Width := fFramebm.Width;
-        FrameBox.Invalidate;
-      end;
+    if GetFrameBitmap(VideoClipFile.Caption, fFramebm, FrameBox.Height,
+      FrameNo.Value) then
+    begin
+      FrameBox.Width := fFramebm.Width;
+      FrameBox.Invalidate;
+    end;
   end;
 end;
 
@@ -825,8 +881,6 @@ begin
     DirectoryTreeChange(fDirectoryTree, fDirectoryTree.Selected);
 end;
 
-
-
 procedure TDemoWMFMain.PickEndImageClick(Sender: TObject);
 begin
   if not FODPic.Execute then
@@ -855,22 +909,31 @@ begin
     exit;
   end;
   VideoClipFile.Caption := FODVideo.FileName;
-  Memo1.Clear;
-  Memo1.Lines.Add('Codec name: ' + VideoInfo.CodecName);
-  Memo1.Lines.Add('Video size: ' + VideoInfo.VideoWidth.ToString + 'x' +
+  DisplayVideoInfo(Memo1, VideoInfo);
+  if GetFrameBitmap(FODVideo.FileName, fFramebm, FrameBox.Height, FrameNo.Value)
+  then
+  begin
+    FrameBox.Width := fFramebm.Width;
+    FrameBox.Invalidate;
+  end;
+end;
+
+procedure TDemoWMFMain.DisplayVideoInfo(const aMemo: TMemo;
+const VideoInfo: TVideoInfo);
+begin
+  aMemo.Clear;
+  aMemo.Lines.Add('Codec name: ' + VideoInfo.CodecName);
+  aMemo.Lines.Add('Video size: ' + VideoInfo.VideoWidth.ToString + 'x' +
     VideoInfo.VideoHeight.ToString);
-  Memo1.Lines.Add('Frame rate: ' + FloatToStrF(VideoInfo.FrameRate, ffFixed, 4,
+  aMemo.Lines.Add('Frame rate: ' + FloatToStrF(VideoInfo.FrameRate, ffFixed, 4,
     2) + ' fps');
-  Memo1.Lines.Add('Duration: ' + FloatToStrF(VideoInfo.Duration / 1000 / 10000,
+  aMemo.Lines.Add('Duration: ' + FloatToStrF(VideoInfo.Duration / 1000 / 10000,
     ffFixed, 5, 2) + ' sec');
-  Memo1.Lines.Add('Pixel Aspect: ' + FloatToStrF(VideoInfo.PixelAspect,
+  aMemo.Lines.Add('Pixel aspect: ' + FloatToStrF(VideoInfo.PixelAspect,
     ffFixed, 5, 4));
-  Memo1.Lines.Add('Interlace Mode: ' + VideoInfo.InterlaceMode.ToString);
-    if GetFrameBitmap(FODVideo.FileName, fFramebm, FrameBox.Height, FrameNo.Value) then
-    begin
-      FrameBox.Width := fFramebm.Width;
-      FrameBox.Invalidate;
-    end;
+  aMemo.Lines.Add('Interlace mode: ' + VideoInfo.InterlaceModeName + ' (' +
+    VideoInfo.InterlaceMode.ToString + ')');
+  aMemo.Lines.Add('Audio streams: ' + VideoInfo.AudioStreamCount.ToString);
 end;
 
 procedure TDemoWMFMain.PreviewPaint(Sender: TObject);

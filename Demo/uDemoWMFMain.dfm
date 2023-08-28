@@ -3,7 +3,7 @@ object DemoWMFMain: TDemoWMFMain
   Top = 0
   Caption = 'DemoWMFMain'
   ClientHeight = 561
-  ClientWidth = 900
+  ClientWidth = 899
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -210,21 +210,21 @@ object DemoWMFMain: TDemoWMFMain
   object PagesPanel: TPanel
     Left = 228
     Top = 0
-    Width = 672
+    Width = 671
     Height = 561
     Align = alClient
     TabOrder = 1
     object StatusPanel: TPanel
       Left = 1
       Top = 536
-      Width = 670
+      Width = 669
       Height = 24
       Align = alBottom
       TabOrder = 0
       object Status: TLabel
         Left = 1
         Top = 1
-        Width = 668
+        Width = 667
         Height = 22
         Align = alClient
         Alignment = taCenter
@@ -243,7 +243,7 @@ object DemoWMFMain: TDemoWMFMain
     object PageControl1: TPageControl
       Left = 1
       Top = 1
-      Width = 670
+      Width = 669
       Height = 535
       ActivePage = TabSheet1
       Align = alClient
@@ -269,7 +269,7 @@ object DemoWMFMain: TDemoWMFMain
         object Label9: TLabel
           Left = 0
           Top = 0
-          Width = 662
+          Width = 661
           Height = 44
           Align = alTop
           Alignment = taCenter
@@ -368,17 +368,17 @@ object DemoWMFMain: TDemoWMFMain
         object Panel4: TPanel
           Left = 316
           Top = 0
-          Width = 346
+          Width = 345
           Height = 485
           Align = alClient
           TabOrder = 1
           DesignSize = (
-            346
+            345
             485)
           object ImageCount: TLabel
             Left = 1
             Top = 1
-            Width = 344
+            Width = 343
             Height = 15
             Align = alTop
             Alignment = taCenter
@@ -389,7 +389,7 @@ object DemoWMFMain: TDemoWMFMain
           object Panel5: TPanel
             Left = 1
             Top = 48
-            Width = 344
+            Width = 343
             Height = 400
             Anchors = [akLeft, akTop, akRight]
             TabOrder = 0
@@ -557,7 +557,7 @@ object DemoWMFMain: TDemoWMFMain
           AlignWithMargins = True
           Left = 3
           Top = 399
-          Width = 656
+          Width = 655
           Height = 83
           Align = alBottom
           Alignment = taCenter
@@ -574,6 +574,7 @@ object DemoWMFMain: TDemoWMFMain
           ShowAccelChar = False
           Layout = tlCenter
           WordWrap = True
+          ExplicitWidth = 656
         end
         object Label15: TLabel
           Left = 8
@@ -658,7 +659,7 @@ object DemoWMFMain: TDemoWMFMain
         object Memo1: TMemo
           Left = 8
           Top = 267
-          Width = 185
+          Width = 273
           Height = 126
           Lines.Strings = (
             'Memo1')
@@ -687,6 +688,22 @@ object DemoWMFMain: TDemoWMFMain
           Height = 15
           Caption = 'TranscoderInput'
         end
+        object Label19: TLabel
+          Left = 24
+          Top = 328
+          Width = 617
+          Height = 89
+          AutoSize = False
+          Caption = 
+            'Transcode the video-stream and the 1st audio-stream of the input' +
+            '-video to output using the encoder-settings to the left.  Note t' +
+            'hat the number of audio-streams reported in the input-box is usu' +
+            'ally wrong for .vob. I see no way to get it right at the moment,' +
+            ' ideas welcome.   For .mkv with multiple audio-streams the info ' +
+            'is right. '
+          Layout = tlCenter
+          WordWrap = True
+        end
         object Button1: TButton
           Left = 16
           Top = 32
@@ -704,6 +721,32 @@ object DemoWMFMain: TDemoWMFMain
           Caption = 'Transcode'
           TabOrder = 1
           OnClick = Button3Click
+        end
+        object CheckBox1: TCheckBox
+          Left = 136
+          Top = 76
+          Width = 97
+          Height = 17
+          Caption = 'Crop to aspect'
+          TabOrder = 2
+        end
+        object Memo2: TMemo
+          Left = 16
+          Top = 145
+          Width = 289
+          Height = 161
+          Lines.Strings = (
+            'Memo2')
+          TabOrder = 3
+        end
+        object Button4: TButton
+          Left = 16
+          Top = 114
+          Width = 105
+          Height = 25
+          Caption = 'Abort'
+          TabOrder = 4
+          OnClick = Button4Click
         end
       end
     end
@@ -962,7 +1005,7 @@ object DemoWMFMain: TDemoWMFMain
       end
       item
         DisplayName = 'Audio- and video-files'
-        FileMask = '*.wav;*.mp3;*.aac;*.wma;*.avi;*.mp4;*.mpg;*.mkv;*.vob'
+        FileMask = '*.wav;*.mp3;*.aac;*.wma;*.avi;*.mp4;*.mpg;*.mkv;*.vob;*.wmv'
       end
       item
         DisplayName = 'Any'

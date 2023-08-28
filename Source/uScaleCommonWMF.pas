@@ -299,17 +299,7 @@ begin
     // upsampling
     rr := r;
   delta := 1 / rr;
-  if scale = 1 then
-  begin
-    for x := 0 to TargetSize - 1 do
-    begin
-      Contribs[x].Min := x;
-      Contribs[x].High := 0;
-      SetLength(Contribs[x].Weights, 1);
-      Contribs[x].Weights[0] := prec;
-    end;
-    exit;
-  end;
+  
   for x := 0 to TargetSize - 1 do
   begin
     xCenter := (x + 0.5) * scale;
