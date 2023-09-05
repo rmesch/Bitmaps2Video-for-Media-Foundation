@@ -24,9 +24,6 @@ uses
   VCL.StdCtrls,
   VCL.ExtCtrls,
   VCL.ImgList,
-  VCL.VirtualImageList,
-  VCL.BaseImageCollection,
-  VCL.ImageCollection,
   VCL.ComCtrls,
   VCL.Samples.Spin,
   uDirectoryTree,
@@ -49,8 +46,6 @@ type
   end;
 
   TDemoWMFMain = class(TForm)
-    ImageCollection1: TImageCollection;
-    VirtualImageList1: TVirtualImageList;
     SettingsPanel: TPanel;
     PagesPanel: TPanel;
     StatusPanel: TPanel;
@@ -134,6 +129,7 @@ type
     Memo2: TMemo;
     Label19: TLabel;
     Button4: TButton;
+    ImageList1: TImageList;
 
     // Important procedure showing the use of TBitmapEncoderWMF
     procedure WriteAnimationClick(Sender: TObject);
@@ -744,7 +740,7 @@ begin
   fDirectoryTree := TDirectoryTree.Create(self);
   fDirectoryTree.Parent := Panel3;
   fDirectoryTree.Align := alClient;
-  fDirectoryTree.Images := VirtualImageList1;
+  fDirectoryTree.Images := ImageList1;
   fDirectoryTree.HideSelection := false;
   fFileList := TStringlist.Create;
   fDirectoryTree.NewRootFolder(TPath.GetPicturesPath);

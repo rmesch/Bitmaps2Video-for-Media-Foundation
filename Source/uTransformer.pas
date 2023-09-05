@@ -39,6 +39,11 @@ unit uTransformer;
 
 interface
 
+{$IFOPT O+ }
+{$DEFINE O_PLUS }
+{$O- }
+{$ENDIF }
+
 uses
   WinApi.Windows,
   WinApi.ActiveX,
@@ -245,7 +250,7 @@ begin
       hr := pReader.GetNativeMediaType(AudioStreamNo, 0, pMediaTypeIn);
       if Failed(hr) then
       begin
-        err := IntToHex(hr); // MF_E_IVALIDSTREAMNUMBER
+        err := IntToHex(hr); // MF_E_INVALIDSTREAMNUMBER
         break;
       end;
       CheckFail(pMediaTypeIn.GetMajorType(GUID));
@@ -489,5 +494,10 @@ begin
   end;
 
 end;
+
+{$IFDEF O_PLUS}
+{$O+}
+{$UNDEF O_PLUS}
+{$ENDIF}
 
 end.

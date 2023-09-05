@@ -1,3 +1,6 @@
+2023-09-05
+Replaced TVirtualImageList by TImagelist, hopefully now compiles with Seattle.
+
 2023-08-28
 Rework of audio input. 
 Fixed memory leaks (please report if memory consumption still keeps increasing).

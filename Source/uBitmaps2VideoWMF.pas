@@ -232,7 +232,7 @@ type
     // See Freeze and WriteAudio.
     property TimingDebug: boolean read fTimingDebug write fTimingDebug;
 
-    // Event which fires every 30 frames. Use to indicate progress.
+    // Event which fires every 30 frames. Use to indicate progress or abort encoding.
     property OnProgress: TBitmapEncoderProgressEvent read fOnProgress
       write fOnProgress;
   end;
@@ -665,7 +665,7 @@ begin
   CheckFail(pSampleBufferAudio.SetCurrentLength(fBufferSizeAudio));
 
   // Set the amount of time we read ahead of the video-timestamp in the audio-file
-  fReadAhead := 3 * AudioDuration(1024); // duration of 3 encoded AAC-frames
+  fReadAhead := 4 * AudioDuration(1024); // duration of 4 encoded AAC-frames
 end;
 
 procedure TBitmapEncoderWMF.Finalize;
@@ -1022,7 +1022,7 @@ procedure TBitmapEncoderWMF.WriteAudio(TimeStamp: int64);
 var
   ActualStreamIndex: DWord;
   flags: DWord;
-  AudioTimestamp, AudioSampleDuration, FixedUpDuration: int64;
+  AudioTimestamp, AudioSampleDuration: int64;
   pAudioSample: IMFSample;
   Count: integer;
 const
@@ -1073,20 +1073,11 @@ begin
     if (pAudioSample <> nil) then
     begin
 
-      // Fill gaps in the audio stream. Can occur with .vob as source.
-      // Some devices other than windows can't handle gaps
-      // in streams, leading to wrong audio-sync.
-      // This approach seems a bit naive, but works in many cases.
+      
       CheckFail(pAudioSample.GetSampleDuration(AudioSampleDuration));
-      // If the timestamp is > previous timestamp + previous duration
-      // then we move the timestamp back and increase the duration
-      // instead.
-      if AudioTimestamp > fAudioTime then
-        FixedUpDuration := AudioSampleDuration + (AudioTimestamp - fAudioTime)
-      else
-        FixedUpDuration := AudioSampleDuration;
-      CheckFail(pAudioSample.SetSampleTime(fAudioTime + fAudioStart));
-      CheckFail(pAudioSample.SetSampleDuration(FixedUpDuration));
+
+      CheckFail(pAudioSample.SetSampleTime(AudioTimeStamp + fAudioStart));
+      CheckFail(pAudioSample.SetSampleDuration(AudioSampleDuration));
       // send sample to sink-writer
       CheckFail(pSinkWriter.WriteSample(fSinkStreamIndexAudio, pAudioSample));
       // new end of sample time
