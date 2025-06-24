@@ -1,3 +1,18 @@
+2025-06-24
+Update to MFPack for SDK version 10.0.26100.0
+
+Changes to uDirectoryTree.pas, uDemoWMFMain.pas, uBitmaps2VideoWMF.pas, uScaleWMF.pas to enable compatibility with Delphi XE7 and up, as proposed by Tony Kalf from FactoryXCode.
+Hope I didn't mess it up again. I test on Delphi 12.1 CE.
+
+Fixes to avoid stuttering video, by further slowing down frame generation. The slowdown is controlled by a new parameter EncodePriority passed to TBitmapEncoderWMF.Initialize. Precisely timed sleeps are inserted at some well chosen (?) spots. For this the timer-precision is set to 1 ms in uBitmapsToVideoWMF.pas initialization, and reset in finalization. 
+Remark: in Windows 11 and later versions of Windows 10 this change is no longer system-wide.
+
+Added advanced options to turn on/off some Mediafoundation attributes. I changed the default GOP-size, for example, which improves things.
+
+A new look of the slideshow-part of the demo, inspired by the adaptation SinkWriterToEncodeVideoSample\Example3 of my project at https://github.com/FactoryXCode/MfPack
+
+The repo no longer contains dproj-files. Before using the demo-project you should set the output directories to .\$(Platform)\$(Config) in the project options.
+
 2023-09-05
 Replaced TVirtualImageList by TImagelist, hopefully now compiles with Seattle.
 

@@ -1,4 +1,17 @@
-//==============================================================================
+// Project Location:
+// https://github.com/rmesch/Bitmaps2Video-for-Media-Foundation
+// Copyright © 2003-2025 Renate Schaaf
+//
+// Intiator(s): Renate Schaaf
+// Contributor(s): Renate Schaaf,
+//                 Tony Kalf (maXcomX) https://github.com/FactoryXCode/MfPack
+//
+// Release date: June 2025
+// =============================================================================
+// Thanks:
+// To A.Melander, M.Lischke, E.Grange
+// for code inspiring this resampling tool.
+// =============================================================================
 //
 // LICENSE
 //
@@ -17,9 +30,7 @@
 // Commercial users are not allowed to distribute this sourcecode as part of
 // their product.
 //
-//==============================================================================
-//  Copyright © 2003-2023 Renate Schaaf
-//==============================================================================
+// =============================================================================
 
  
 
@@ -99,8 +110,10 @@ type
     fResamplingThreads: TThreadArray;
   public
     property ResamplingThreads: TThreadArray read fResamplingThreads;
+
     /// <summary> Creates the threads. Call before you use it in parallel procedures. If already initialized, it will finalize first, don't call it unnecessarily. </summary>
     procedure Initialize(aMaxThreadCount: integer; aPriority: TThreadpriority);
+
     /// <summary> Frees the threads. Call when your code exits the part where you use parallel resampling to free up memory and CPU-time. If you don't finalize a custom threadpool, you will have a memory leak. </summary>
     procedure Finalize;
     property Initialized: boolean read fInitialized;
@@ -151,7 +164,7 @@ type
       SourcePitch, TargetPitch: integer; SourceStart, TargetStart: PByte);
   end;
 
-  PResamplingThreadSetup = ^TResamplingThreadSetup;
+  //PResamplingThreadSetup = ^TResamplingThreadSetup;
 
 var
   _DefaultThreadPool: TResamplingThreadPool;

@@ -1,3 +1,34 @@
+// Project Location:
+// https://github.com/rmesch/Bitmaps2Video-for-Media-Foundation
+// Copyright © 2003-2025 Renate Schaaf
+//
+// Intiator(s): Renate Schaaf
+// Contributor(s): Renate Schaaf,
+//                 Tony Kalf (maXcomX) https://github.com/FactoryXCode/MfPack
+//
+// Release date: June 2025
+// =============================================================================
+// =============================================================================
+//
+// LICENSE
+//
+// The contents of this file are subject to the Mozilla Public License
+// Version 2.0 (the "License"); you may not use this file except in
+// compliance with the License. You may obtain a copy of the License at
+// https://www.mozilla.org/en-US/MPL/2.0/
+//
+// Software distributed under the License is distributed on an "AS IS"
+// basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See the
+// License for the specific language governing rights and limitations
+// under the License.
+//
+// Non commercial users may distribute this sourcecode provided that this
+// header is included in full at the top of the file.
+// Commercial users are not allowed to distribute this sourcecode as part of
+// their product.
+//
+// =============================================================================
+
 unit uDirectoryTree;
 // Displays the directory-tree of a root folder. New nodes are only created as necessary
 // when either a node is selected or expanded.
@@ -7,8 +38,18 @@ interface
 
 {$WARN SYMBOL_PLATFORM OFF}
 
-uses VCL.ComCtrls, VCL.Controls, System.Classes,
-  System.Types, System.IOUtils, System.SysUtils;
+
+uses
+  WinApi.Windows,
+{$IF COMPILERVERSION >= 29.0}
+  WinApi.ShLwApi,
+{$ENDIF}
+  VCL.ComCtrls,
+  VCL.Controls,
+  System.Classes,
+  System.Types,
+  System.IOUtils,
+  System.SysUtils;
 
 type
   TNodeData = record
@@ -24,23 +65,25 @@ type
   protected
     procedure Change(Node: TTreeNode); override;
     procedure Delete(Node: TTreeNode); override;
-    function CanExpand(Node: TTreeNode): boolean; override;
+    function CanExpand(Node: TTreeNode)
+      : boolean; override;
   public
     constructor Create(aOwner: TComponent); override;
     destructor Destroy; override;
     procedure NewRootFolder(const RootFolder: string);
-    function GetFullFolderName(aNode: TTreeNode): string;
-    procedure GetAllFiles(const aStringList: TStringlist;
-      const aFileMask: string);
+    function GetFullFolderName(aNode: TTreeNode)
+      : string;
+    procedure GetAllFiles(
+      const aStringList: TStringlist;
+      const aFileMask:   string);
   end;
 
 implementation
 
-uses WinAPI.Windows, WinAPI.ShlWApi;
-
 { TDirectoryTree }
 
-function TDirectoryTree.CanExpand(Node: TTreeNode): boolean;
+function TDirectoryTree.CanExpand(Node: TTreeNode)
+  : boolean;
 begin
   inherited;
   if assigned(Node.Data) then
@@ -123,7 +166,9 @@ begin
         New(NodeData);
         NodeData.FullPath := NewName;
         NodeData.HasEnoughSubnodes := false;
-        TreeItem := Items.AddChild(aItem, ExtractFilename(NewName));
+        TreeItem := Items.AddChild(
+          aItem,
+          ExtractFilename(NewName));
         TreeItem.Data := NodeData;
         TreeItem.ImageIndex := 0;
       end
@@ -151,7 +196,9 @@ begin
       begin
         if TreeItem.Count <= j then
         begin
-          TreeItem2 := Items.AddChild(TreeItem, ExtractFilename(DirArray2[j]));
+          TreeItem2 := Items.AddChild(
+            TreeItem,
+            ExtractFilename(DirArray2[j]));
           New(NodeData);
           NodeData.FullPath := DirArray2[j];
           NodeData.HasEnoughSubnodes := false;
@@ -180,7 +227,9 @@ begin
     ShortName := ExtractFilename(RootFolder);
     if ShortName = '' then
       ShortName := RootFolder;
-    Root := Items.AddChild(nil, ShortName);
+    Root := Items.AddChild(
+      nil,
+      ShortName);
     New(NodeData);
     NodeData.FullPath := RootFolder;
     NodeData.HasEnoughSubnodes := false;
@@ -194,26 +243,43 @@ begin
   Root.Selected := true;
 end;
 
-function TDirectoryTree.GetFullFolderName(aNode: TTreeNode): string;
+function TDirectoryTree.GetFullFolderName(aNode: TTreeNode)
+  : string;
 begin
   if not assigned(aNode.Data) then
     raise Exception.Create('Node has no directory name');
   Result := PNodeData(aNode.Data).FullPath;
 end;
 
-function LogicalCompare(List: TStringlist; Index1, Index2: integer): integer;
-begin
-  Result := StrCmpLogicalW(PWideChar(List[Index1]), PWideChar(List[Index2]));
-end;
+{$IF COMPILERVERSION >= 29.0}
 
-procedure TDirectoryTree.GetAllFiles(const aStringList: TStringlist;
-const aFileMask: string);
+function LogicalCompare(
+  List:           TStringlist;
+  Index1, Index2: integer)
+  : integer;
+begin
+  Result := StrCmpLogicalW(
+    PWideChar(List[Index1]),
+    PWideChar(List[Index2]));
+end;
+{$ENDIF}
+
+
+procedure TDirectoryTree.GetAllFiles(
+  const aStringList: TStringlist;
+  const aFileMask:   string);
 var
   FilePath, mask, SearchStr: string;
   MaskLen, MaskPos, SepPos: integer;
+
+{$IF COMPILERVERSION < 30.0}
+  i: integer;
+  Strings: TArray<string>;
+  ClassicStrings: TStringDynArray;
+{$ENDIF}
 begin
   FilePath := IncludeTrailingBackSlash(GetFullFolderName(Selected));
-  Assert(Assigned(aStringList));
+  Assert(assigned(aStringList));
   aStringList.Clear;
   mask := aFileMask;
   MaskLen := Length(mask);
@@ -223,24 +289,44 @@ begin
   begin
     SepPos := Pos(';', mask, MaskPos + 1) - 1;
     if SepPos >= 0 then
-      SearchStr := Copy(mask, MaskPos + 1, SepPos - MaskPos)
+      SearchStr := Copy(
+        mask,
+        MaskPos + 1,
+        SepPos - MaskPos)
     else
-      SearchStr := Copy(mask, MaskPos + 1, MaskLen);
+      SearchStr := Copy(
+        mask,
+        MaskPos + 1,
+        MaskLen);
 
-    aStringList.AddStrings(TDirectory.GetFiles(FilePath, SearchStr,
+{$IF COMPILERVERSION > 29.0}
+    aStringList.AddStrings(TDirectory.GetFiles(
+      FilePath,
+      SearchStr,
       TSearchOption.soTopDirectoryOnly));
+{$ELSE}
+    ClassicStrings := TDirectory.GetFiles(
+      FilePath,
+      SearchStr,
+      TSearchOption.soTopDirectoryOnly);
+    // Copy all fields to the new array
+    for i := Low(ClassicStrings) to High(ClassicStrings) do
+      Strings[i] := ClassicStrings[i];
 
-    if SepPos >= 0 then
+    aStringList.AddStrings(Strings);
+{$ENDIF}
+    if (SepPos >= 0) then
     begin
       inc(SepPos);
-      if SepPos >= MaskLen then
+      if (SepPos >= MaskLen) then
         SepPos := -1;
     end;
     MaskPos := SepPos;
   end;
-
+{$IF COMPILERVERSION >= 29.0}
   // Natural sorting order, e.g. '7' '8' '9' '10'
   aStringList.CustomSort(LogicalCompare);
+{$ENDIF}
 end;
 
 end.

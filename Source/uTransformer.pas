@@ -1,4 +1,18 @@
-// ==============================================================================
+// Project Location:
+// https://github.com/rmesch/Bitmaps2Video-for-Media-Foundation
+// Copyright © 2003-2025 Renate Schaaf
+//
+// Intiator(s): Renate Schaaf
+// Contributor(s): Renate Schaaf, Tony Kalf (maXcomX)
+//
+// Release date: June 2025
+// =============================================================================
+// Requires: MFPack for SDK version 10.0.26100.0
+//           https://github.com/FactoryXCode/MfPack
+// =============================================================================
+// Source: FactoryX.Code Sinkwriter and Transcode Examples.
+//         https://github.com/FactoryXCode/MfPack
+// =============================================================================
 //
 // LICENSE
 //
@@ -17,15 +31,7 @@
 // Commercial users are not allowed to distribute this sourcecode as part of
 // their product.
 //
-// ==============================================================================
-// Copyright © 2023 Renate Schaaf
-//
-// Requires MFPack at https://github.com/FactoryXCode/MfPack
-// Download the repository and add the folder "src" to your library path.
-//
-// The sinkwriter sample in this repository got me started on this project.
-// Thanks for the great work!
-// ==============================================================================
+// =============================================================================
 unit uTransformer;
 
 // Contains:
@@ -44,14 +50,18 @@ interface
 {$O- }
 {$ENDIF }
 
+
 uses
   WinApi.Windows,
   WinApi.ActiveX,
+  WinApi.Messages,
+  WinApi.MMSystem,
   System.SysUtils,
   System.Types,
   System.Math,
   System.Classes,
   VCL.Graphics,
+  System.SyncObjs,
   // mfPack headers
   WinApi.MediaFoundationApi.MfApi,
   WinApi.MediaFoundationApi.MfUtils,
@@ -60,27 +70,36 @@ uses
   WinApi.MediaFoundationApi.CodecApi,
   WinApi.ActiveX.PropIdl,
   WinApi.MediaFoundationApi.MfIdl,
-  WinApi.ActiveX.PropVarUtil;
+  WinApi.ActiveX.PropVarUtil,
+  WinApi.WinApiTypes;
+
+const
+  Msg_Audio = WM_User + 2;
 
 type
+
   TVideoInfo = record
     Codec: TGUID;
     CodecName: string;
     Duration: int64;
+    DurationString: string;
     VideoWidth, VideoHeight: DWord;
-    FrameRate: single;
-    PixelAspect: single;
+    FrameRate: double;
+    PixelAspect: double;
+    VideoAspect: double;
+    VideoAspectString: string;
     InterlaceMode: DWord;
     InterlaceModeName: string;
     AudioStreamCount: DWord;
   end;
 
   eVideoFormatException = class(Exception);
+  eAudioFormatException = class(Exception);
 
   TVideoTransformer = class
   private
     pReader: IMFSourceReader;
-    hrCoInit: HResult;
+    hrCoInit, hrStartUp: HResult;
     fVideoInfo: TVideoInfo;
     pMediaTypeOut: IMFMediaType;
     fNewWidth, fNewHeight: DWord;
@@ -88,12 +107,25 @@ type
     fInputFile: string;
     fEndOfFile: boolean;
   public
-    constructor Create(const InputFile: string; NewHeight: DWord;
-      NewFrameRate: single);
-    procedure NextValidSampleToBitmap(const bm: TBitmap;
+    constructor Create(
+      const InputFile: string;
+      NewHeight:       DWord;
+      NewFrameRate:    single); overload;
+    constructor Create(
+      const InputFile: string;
+      NewHeight:       DWord;
+      NewFrameRate:    single;
+      FrameRateCap:    single); overload;
+    function NextValidSampleToBitmap(
+      const bm:                TBitmap;
+      out Timestamp, Duration: int64)
+      : boolean;
+    procedure GetNextValidSample(
+      out pSample:             IMFSample;
       out Timestamp, Duration: int64);
-    procedure GetNextValidSample(out pSample: IMFSample;
-      out Timestamp, Duration: int64);
+    function Seek(VideoTime: int64)
+      : boolean;
+    function SampleCount: UInt32;
     destructor Destroy; override;
     property NewVideoWidth: DWord read fNewWidth;
     property NewVideoHeight: DWord read fNewHeight;
@@ -102,15 +134,46 @@ type
     property VideoInfo: TVideoInfo read fVideoInfo;
   end;
 
-function GetVideoInfo(const VideoFileName: string): TVideoInfo;
+function GetVideoInfo(const VideoFileName: string)
+  : TVideoInfo;
 
-// Very slow at the moment. Need to apply seeking to speed it up.
-function GetFrameBitmap(const VideoFileName: string; const bm: TBitmap;
-  bmHeight: DWord; FrameNo: DWord): boolean;
+function GetFrameBitmap(
+  const VideoFileName: string;
+  const bm:            TBitmap;
+  bmHeight:            DWord;
+  FrameNo:             DWord)
+  : boolean;
+
+/// <summary> Changes system timer resolution [ms]. Must be matched with TimeEndPeriod(SetResolution). </summary>
+/// <param name = "TargetResolution">Desired timer resolution in ms </param>
+/// <param name = "SetResolution"> Resolution actually set </param>
+function SetTimerResolution(
+  TargetResolution:  UInt32;
+  var SetResolution: UInt32)
+  : HResult;
+
 
 implementation
 
-function GetVideoInfo(const VideoFileName: string): TVideoInfo;
+function SetTimerResolution(
+  TargetResolution:  UInt32;
+  var SetResolution: UInt32)
+  : HResult;
+var
+  tc: TimeCaps;
+begin
+  Result := E_Fail;
+  if TimeGetDevCaps(@tc, SizeOF(TimeCaps)) <> TIMERR_NOERROR then
+    exit;
+  SetResolution := min(
+    max(tc.wPeriodMin, TargetResolution),
+    tc.wPeriodMax);
+  if TimeBeginPeriod(SetResolution) = TIMERR_NOERROR then
+    Result := S_OK;
+end;
+
+function GetVideoInfo(const VideoFileName: string)
+  : TVideoInfo;
 var
   Count: integer;
   GUID: TGUID;
@@ -120,7 +183,7 @@ var
   pMediaTypeIn, pMediaTypeOut, pPartialType: IMFMediaType;
   mfArea: MFVideoArea;
   attribs: IMFAttributes;
-  hrCoInit, hrStartup: HResult;
+  hrCoInit, hrStartUp: HResult;
   pb: PByte;
   FourCC: DWord;
   FourCCString: string[4];
@@ -135,7 +198,7 @@ const
     inc(Count);
     if not succeeded(hr) then
     begin
-      err := '$' + IntToHex(hr);
+      err := '$' + IntToHex(hr, 8);
       raise Exception.Create('Fail in call nr. ' + IntToStr(Count) + ' of ' +
         ProcName + ' with result ' + err);
     end;
@@ -144,14 +207,17 @@ const
 begin
   Count := 0;
   pReader := nil;
-  hrCoInit := E_FAIL;
-  hrStartup := E_FAIL;
+  hrCoInit := E_Fail;
+  hrStartUp := E_Fail;
   try
-    hrCoInit := CoInitializeEx(nil, COINIT_APARTMENTTHREADED);
+    hrCoInit := CoInitializeEx(
+      nil,
+      COINIT_APARTMENTTHREADED or
+      COINIT_DISABLE_OLE1DDE);
     CheckFail(hrCoInit);
 
-    hrStartup := MFStartup(MF_VERSION);
-    CheckFail(hrStartup);
+    hrStartUp := MFStartup(MF_VERSION);
+    CheckFail(hrStartUp);
 
     CheckFail(MFCreateAttributes(attribs, 1));
     CheckFail(attribs.SetUINT32(MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING,
@@ -178,7 +244,9 @@ begin
     begin
       FourCC := GUID.D1;
       pb := PByte(@FourCC);
-      SetLength(FourCCString, 4);
+      SetLength(
+        FourCCString,
+        4);
       for I := 1 to 4 do
       begin
         FourCCString[I] := AnsiChar(pb^);
@@ -190,20 +258,29 @@ begin
     CheckFail(pReader.GetPresentationAttribute(MF_SOURCE_READER_MEDIASOURCE,
       MF_PD_DURATION, _var));
     CheckFail(PropVariantToInt64(_var, Result.Duration));
+    Result.DurationString:=HnsTimeToStr(Result.Duration,False) + '[h:m:s]';
     // Result.Duration := _var.hVal.QuadPart; Makes no difference.
     PropVariantClear(_var);
 
-    ZeroMemory(@mfArea, sizeof(mfArea));
+    ZeroMemory(
+      @mfArea,
+      SizeOF(mfArea));
 
     // for some codecs, like HEVC, MF_MT_FRAME_SIZE does not
     // return the correct video size for display.
     // So we check first whether the correct size is
     // available via an MFVideoArea.
-    hr := pMediaTypeIn.GetBlob(MF_MT_PAN_SCAN_APERTURE, @mfArea,
-      sizeof(MFVideoArea), nil);
+    hr := pMediaTypeIn.GetBlob(
+      MF_MT_PAN_SCAN_APERTURE,
+      @mfArea,
+      SizeOF(MFVideoArea),
+      nil);
     if Failed(hr) then
-      hr := pMediaTypeIn.GetBlob(MF_MT_MINIMUM_DISPLAY_APERTURE, @mfArea,
-        sizeof(MFVideoArea), nil);
+      hr := pMediaTypeIn.GetBlob(
+        MF_MT_MINIMUM_DISPLAY_APERTURE,
+        @mfArea,
+        SizeOF(MFVideoArea),
+        nil);
     if succeeded(hr) then
     begin
       Result.VideoWidth := mfArea.Area.cx;
@@ -215,13 +292,28 @@ begin
     CheckFail(MFGetAttributeRatio(pMediaTypeIn, MF_MT_FRAME_RATE, Num, Den));
     Result.FrameRate := Num / Den;
     // For some codecs it only reads the correct pixel aspect off the decoding media type
-    hr := MFGetAttributeRatio(pMediaTypeOut, MF_MT_PIXEL_ASPECT_RATIO,
-      Num, Den);
+    hr := MFGetAttributeRatio(
+      pMediaTypeOut,
+      MF_MT_PIXEL_ASPECT_RATIO,
+      Num,
+      Den);
     if Failed(hr) then // MF_E_PROPERTY_TYPE_NOT_ALLOWED
       CheckFail(MFGetAttributeRatio(pMediaTypeIn, MF_MT_PIXEL_ASPECT_RATIO,
         Num, Den));
     Result.PixelAspect := Num / Den;
-    hr := pMediaTypeIn.GetUINT32(MF_MT_INTERLACE_MODE, Result.InterlaceMode);
+    if Result.VideoHeight>0 then
+    Result.VideoAspect := Result.VideoWidth/Result.VideoHeight*Result.PixelAspect;
+    if abs(Result.VideoAspect-16/9)<1E-4 then
+    Result.VideoAspectString:='16:9'
+    else
+    if abs(Result.VideoAspect-4/3)<1E-4 then
+    Result.VideoAspectString:='4:3'
+    else
+    Result.VideoAspectString:=FloatToStrF(Result.VideoAspect,ffFixed,6,4);
+
+    hr := pMediaTypeIn.GetUINT32(
+      MF_MT_INTERLACE_MODE,
+      Result.InterlaceMode);
     if Failed(hr) then
       Result.InterlaceMode := 0;
     case Result.InterlaceMode of
@@ -250,43 +342,55 @@ begin
       hr := pReader.GetNativeMediaType(AudioStreamNo, 0, pMediaTypeIn);
       if Failed(hr) then
       begin
-        err := IntToHex(hr); // MF_E_INVALIDSTREAMNUMBER
+        err := IntToHex(
+          hr,
+          8); // MF_E_INVALIDSTREAMNUMBER
         break;
       end;
       CheckFail(pMediaTypeIn.GetMajorType(GUID));
       if GUID = MFMediaType_Audio then
         inc(Result.AudioStreamCount);
       inc(AudioStreamNo);
-    until false;
+    until False;
   finally
-    if succeeded(hrStartup) then
+    if succeeded(hrStartUp) then
       MFShutdown();
     if succeeded(hrCoInit) then
       COUninitialize;
   end;
 end;
 
-function GetFrameBitmap(const VideoFileName: string; const bm: TBitmap;
-  bmHeight: DWord; FrameNo: DWord): boolean;
+function GetFrameBitmap(
+  const VideoFileName: string;
+  const bm:            TBitmap;
+  bmHeight:            DWord;
+  FrameNo:             DWord)
+  : boolean;
 var
   VT: TVideoTransformer;
-  FrameCount: DWord;
   pSample: IMFSample;
-  Timestamp, Duration: int64;
+  Timestamp, Duration, SeekTime: int64;
 begin
-  Result := false;
-  VT := TVideoTransformer.Create(VideoFileName, bmHeight, 0);
+  Result := False;
+  if FrameNo <= 0 then
+    exit;
+  VT := TVideoTransformer.Create(
+    VideoFileName,
+    bmHeight,
+    0);
   try
-    FrameCount := 0;
-    while (FrameCount + 1 < FrameNo) and (not VT.EndOfFile) do
-    begin
+    SeekTime := Trunc((FrameNo - 1) / VT.VideoInfo.FrameRate * 1000 * 10000);
+    If not VT.Seek(SeekTime) then
+      exit;
+    Repeat
       VT.GetNextValidSample(pSample, Timestamp, Duration);
-      inc(FrameCount);
-    end;
+    Until (Timestamp >= SeekTime) or VT.EndOfFile;
     if not VT.EndOfFile then
     begin
-      VT.NextValidSampleToBitmap(bm, Timestamp, Duration);
-      Result := true;
+      Result := VT.NextValidSampleToBitmap(
+        bm,
+        Timestamp,
+        Duration);
     end;
 
   finally
@@ -296,8 +400,11 @@ end;
 
 { TVideoTransformer }
 
-constructor TVideoTransformer.Create(const InputFile: string; NewHeight: DWord;
-  NewFrameRate: single);
+constructor TVideoTransformer.Create(
+  const InputFile: string;
+  NewHeight:       DWord;
+  NewFrameRate:    single;
+  FrameRateCap:    single);
 var
   Count: integer;
   attribs: IMFAttributes;
@@ -310,32 +417,53 @@ const
     if not succeeded(hr) then
     begin
       raise Exception.Create('Fail in call nr. ' + IntToStr(Count) + ' of ' +
-        ProcName + ' with result ' + IntToHex(hr));
+        ProcName + ' with result ' + IntToHex(hr, 8));
     end;
   end;
 
 begin
   Count := 0;
+  hrCoInit := E_Fail;
+  hrStartUp := E_Fail;
   fInputFile := InputFile;
-  fNewHeight := NewHeight;
   try
+
     fVideoInfo := GetVideoInfo(fInputFile);
     if NewFrameRate = 0 then
-      fNewFrameRate := fVideoInfo.FrameRate
+      if fVideoInfo.FrameRate > 240 then // probably erroneuous value
+        fNewFrameRate := 60
+      else
+        fNewFrameRate := fVideoInfo.FrameRate
     else
       fNewFrameRate := NewFrameRate;
-    hrCoInit := CoInitializeEx(nil, COINIT_APARTMENTTHREADED);
+    if NewHeight = 0 then
+      fNewHeight := fVideoInfo.VideoHeight
+    else
+      fNewHeight := NewHeight;
+    fNewFrameRate := min(
+      fNewFrameRate,
+      FrameRateCap);
+    hrCoInit := CoInitializeEx(
+      nil,
+      COINIT_APARTMENTTHREADED or
+      COINIT_DISABLE_OLE1DDE);
     CheckFail(hrCoInit);
-    CheckFail(MFStartup(MF_VERSION));
+    hrStartUp := MFStartup(MF_VERSION);
+    CheckFail(hrStartUp);
 
     CheckFail(MFCreateAttributes(attribs, 1));
 
     // Enable the source-reader to make color-conversion, change video size, frame-rate and interlace-mode
     CheckFail(attribs.SetUINT32
       (MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, UInt32(true)));
-    // The next causes problems for some video formats
-    // CheckFail(attribs.SetUINT32
-    // (MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, UInt32(true)));
+    // The next was an attempt to enable hardware decoding, but
+    // it doesn't work for the target mediatype MFVideoFormat_RGB32
+
+    // if (fVideoInfo.Codec = MFVideoFormat_H264) or
+    // (fVideoInfo.Codec = MFVideoFormat_HEVC) then
+    // CheckFail(attribs.SetUINT32(MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS,
+    // UInt32(true)));
+
     // Create a sourcereader for the video file
     CheckFail(MFCreateSourceReaderFromURL(PWideChar(fInputFile), attribs,
       pReader));
@@ -360,26 +488,40 @@ begin
     CheckFail(pReader.GetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM,
       pMediaTypeOut));
     // Prevent memory leak
-    CheckFail(pReader.SetStreamSelection(MF_SOURCE_READER_ALL_STREAMS, false));
+    CheckFail(pReader.SetStreamSelection(MF_SOURCE_READER_ALL_STREAMS, False));
     // Ensure the stream is selected.
     CheckFail(pReader.SetStreamSelection
       (MF_SOURCE_READER_FIRST_VIDEO_STREAM, true));
-    fEndOfFile := false;
+    fEndOfFile := False;
   except
     raise eVideoFormatException.Create
       ('Video format of input file not supported.');
   end;
 end;
 
+constructor TVideoTransformer.Create(
+  const InputFile: string;
+  NewHeight:       DWord;
+  NewFrameRate:    single);
+begin
+  Create(
+    InputFile,
+    NewHeight,
+    NewFrameRate,
+    240);
+end;
+
 destructor TVideoTransformer.Destroy;
 begin
-  MFShutdown();
+  if succeeded(hrStartUp) then
+    MFShutdown();
   if succeeded(hrCoInit) then
     COUninitialize;
   inherited;
 end;
 
-procedure TVideoTransformer.GetNextValidSample(out pSample: IMFSample;
+procedure TVideoTransformer.GetNextValidSample(
+  out pSample:             IMFSample;
   out Timestamp, Duration: int64);
 var
   Count: integer;
@@ -394,7 +536,7 @@ const
     if not succeeded(hr) then
     begin
       raise Exception.Create('Fail in call nr. ' + IntToStr(Count) + ' of ' +
-        ProcName + ' with result ' + IntToHex(hr));
+        ProcName + ' with result ' + IntToHex(hr, 8));
     end;
   end;
 
@@ -415,7 +557,9 @@ begin
       ((Flags and MF_SOURCE_READERF_ERROR) <> 0) or
       ((Flags and MF_SOURCE_READERF_NEWSTREAM) <> 0) or
       ((Flags and MF_SOURCE_READERF_NATIVEMEDIATYPECHANGED) <> 0) or
-      ((Flags and MF_SOURCE_READERF_ALLEFFECTSREMOVED) <> 0) then
+      ((Flags and MF_SOURCE_READERF_ALLEFFECTSREMOVED) <> 0)
+    then
+
     begin
       fEndOfFile := true;
       break;
@@ -424,10 +568,10 @@ begin
     begin
       SafeRelease(pSample);
       pSample := pSampleLoc;
-      hr := pSample.GetSampleTime(Timestamp);
+      hr := pSample.GetSampleTime(@Timestamp);
       if succeeded(hr) then
 
-        hr := pSample.GetSampleDuration(Duration);
+        hr := pSample.GetSampleDuration(@Duration);
       // fVideoInfo.Duration can return the wrong value!
       // if Timestamp + Duration >= fVideoInfo.Duration then
       // fEndOfFile := true;
@@ -437,14 +581,20 @@ begin
         pSample := nil;
       end;
       break;
-      sleep(0);
+    end
+    else
+    begin
+      SafeRelease(pSampleLoc);
+      pSampleLoc := nil;
     end;
     // Can it happen that we get an infinite loop here?
-  Until false;
+  Until False;
 end;
 
-procedure TVideoTransformer.NextValidSampleToBitmap(const bm: TBitmap;
-  out Timestamp, Duration: int64);
+function TVideoTransformer.NextValidSampleToBitmap(
+  const bm:                TBitmap;
+  out Timestamp, Duration: int64)
+  : boolean;
 var
   Count: integer;
   pSample: IMFSample;
@@ -460,39 +610,97 @@ const
     if not succeeded(hr) then
     begin
       raise Exception.Create('Fail in call nr. ' + IntToStr(Count) + ' of ' +
-        ProcName + ' with result $' + IntToHex(hr));
+        ProcName + ' with result $' + IntToHex(hr, 8));
     end;
   end;
 
 begin
+  Result := False;
   if fEndOfFile then
     exit;
   Count := 0;
-  GetNextValidSample(pSample, Timestamp, Duration);
+  GetNextValidSample(
+    pSample,
+    Timestamp,
+    Duration);
   // an invalid sample is nil
   if assigned(pSample) then
   begin
-    CheckFail(pSample.ConvertToContiguousBuffer(pBuffer));
+    CheckFail(pSample.ConvertToContiguousBuffer(@pBuffer));
     if assigned(pBuffer) then
     begin
       bm.PixelFormat := pf32bit;
-      bm.SetSize(fNewWidth, fNewHeight);
+      bm.SetSize(
+        fNewWidth,
+        fNewHeight);
       Stride := 4 * fNewWidth;
       pRow := bm.ScanLine[0];
       CheckFail(pBuffer.Lock(pData, nil, @ImageSize));
       // Assert(ImageSize = 4 * fNewWidth * fNewHeight);
       CheckFail(MFCopyImage(pRow { Destination buffer. } ,
-        -Stride { Destination stride. } , pData,
-        { First row in source. }
-        Stride { Source stride. } , Stride { Image width in bytes. } ,
+        -Stride { Destination stride. } ,
+        pData, { First row in source. }
+        Stride { Source stride. } ,
+        Stride { Image width in bytes. } ,
         fNewHeight { Image height in pixels. } ));
       CheckFail(pBuffer.Unlock);
       CheckFail(pBuffer.SetCurrentLength(0));
       SafeRelease(pBuffer);
+      Result := true;
     end;
-    sleep(0);
   end;
 
+end;
+
+function TVideoTransformer.SampleCount: UInt32;
+var
+  pSample: IMFSample;
+  Timestamp, Duration: int64;
+begin
+  Result := 0;
+  pSample := nil;
+  while not EndOfFile do
+  begin
+    GetNextValidSample(
+      pSample,
+      Timestamp,
+      Duration);
+    if pSample <> nil then
+      inc(Result);
+    SafeRelease(pSample);
+  end;
+
+end;
+
+function TVideoTransformer.Seek(VideoTime: int64)
+  : boolean;
+var
+  Count: integer;
+  err: string;
+  var_: PropVariant;
+const
+  ProcName = 'TVideoTransformer.Seek';
+  procedure CheckFail(hr: HResult);
+  begin
+    inc(Count);
+    if not succeeded(hr) then
+    begin
+      err := '$' + IntToHex(hr, 8);
+      raise Exception.Create('Fail in call nr. ' + IntToStr(Count) + ' of ' +
+        ProcName + ' with result ' + err);
+    end;
+  end;
+
+begin
+  Count := 0;
+  Result := (VideoTime < fVideoInfo.Duration);
+  if Result then
+  begin
+    CheckFail(InitPropVariantFromInt64(VideoTime, &var_));
+    Result := succeeded(pReader.SetCurrentPosition(GUID_NULL, var_));
+    PropVariantClear(&var_);
+    fEndOfFile := False;
+  end;
 end;
 
 {$IFDEF O_PLUS}
