@@ -29,7 +29,7 @@ To see examples of usage, run the demo-project DemoWMF in the Demo-folder.
 
 Delphi-Versions:
 
-Developed under Delphi 11.3. Should work with 10.3 and up, probably with some earlier versions, too. 
+Developed under Delphi 11.3 - 12.1. Now designed to work with Delphi XE7 and up, unless I goofed it up again. 
 Records with methods, anonymous procedures, interposer classes, tasks and TWicImage need to be available.
 
 Runtime Requirement:
