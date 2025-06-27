@@ -25,11 +25,12 @@ Usage:
 
 Add the 4 files in the Source-directory to your project and the uses-clause of any unit using the encoder.
 The methods of the encoder-class are explained in the interface section of uBitmaps2VideoWMF.pas.
-To see examples of usage, run the demo-project DemoWMF in the Demo-folder.
+To see examples of usage, run the demo-project DemoWMF in the Demo-folder. The repo no longer contains dproj-files. 
+Before using the demo-project you should set the output directories to .\$(Platform)\$(Config) in the project options.
 
 Delphi-Versions:
 
-Developed under Delphi 11.3. Should work with 10.3 and up, probably with some earlier versions, too. 
+Developed under Delphi 11.3 - 12.1. Now designed to work with Delphi XE7 and up, unless I goofed it up again. 
 Records with methods, anonymous procedures, interposer classes, tasks and TWicImage need to be available.
 
 Runtime Requirement:
