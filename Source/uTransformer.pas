@@ -199,8 +199,7 @@ const
     if not succeeded(hr) then
     begin
       err := '$' + IntToHex(hr, 8);
-      raise Exception.Create('Fail in call nr. ' + IntToStr(Count) + ' of ' +
-        ProcName + ' with result ' + err);
+      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x.8', [Count, ProcName, hr]);
     end;
   end;
 
@@ -416,8 +415,7 @@ const
     inc(Count);
     if not succeeded(hr) then
     begin
-      raise Exception.Create('Fail in call nr. ' + IntToStr(Count) + ' of ' +
-        ProcName + ' with result ' + IntToHex(hr, 8));
+      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x.8', [Count, ProcName, hr]);
     end;
   end;
 
@@ -430,9 +428,6 @@ begin
 
     fVideoInfo := GetVideoInfo(fInputFile);
     if NewFrameRate = 0 then
-      if fVideoInfo.FrameRate > 240 then // probably erroneuous value
-        fNewFrameRate := 60
-      else
         fNewFrameRate := fVideoInfo.FrameRate
     else
       fNewFrameRate := NewFrameRate;
@@ -474,7 +469,7 @@ begin
     CheckFail(pPartialType.SetUINT32(MF_MT_INTERLACE_MODE, 2));
     // 2=progressive.
     CheckFail(MFSetAttributeRatio(pPartialType, MF_MT_FRAME_RATE,
-      round(fNewFrameRate * 100), 100));
+      round(fNewFrameRate * 1000), 1000));
 
     fNewWidth := round(fNewHeight * fVideoInfo.VideoWidth /
       fVideoInfo.VideoHeight * fVideoInfo.PixelAspect);
@@ -535,8 +530,7 @@ const
     inc(Count);
     if not succeeded(hr) then
     begin
-      raise Exception.Create('Fail in call nr. ' + IntToStr(Count) + ' of ' +
-        ProcName + ' with result ' + IntToHex(hr, 8));
+      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x.8', [Count, ProcName, hr]);
     end;
   end;
 
@@ -609,8 +603,7 @@ const
     inc(Count);
     if not succeeded(hr) then
     begin
-      raise Exception.Create('Fail in call nr. ' + IntToStr(Count) + ' of ' +
-        ProcName + ' with result $' + IntToHex(hr, 8));
+     raise Exception.CreateFmt('Fail in call no. %d of %s with result %x.8', [Count, ProcName, hr]);
     end;
   end;
 
@@ -686,8 +679,7 @@ const
     if not succeeded(hr) then
     begin
       err := '$' + IntToHex(hr, 8);
-      raise Exception.Create('Fail in call nr. ' + IntToStr(Count) + ' of ' +
-        ProcName + ' with result ' + err);
+      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x.8', [Count, ProcName, hr]);
     end;
   end;
 

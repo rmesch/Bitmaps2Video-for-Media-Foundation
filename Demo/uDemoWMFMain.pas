@@ -8,10 +8,10 @@
 // Release date: June 2025
 // =============================================================================
 // Requires: MFPack for SDK version 10.0.26100.0
-//           https://github.com/FactoryXCode/MfPack
+// https://github.com/FactoryXCode/MfPack
 // =============================================================================
 // Source: FactoryX.Code Sinkwriter and Transcode Examples.
-//         https://github.com/FactoryXCode/MfPack
+// https://github.com/FactoryXCode/MfPack
 // =============================================================================
 //
 // LICENSE
@@ -677,7 +677,7 @@ var
   af: string;
   i: integer;
   TimeImage, TimeTransition: integer;
-  SlideshowTime: Int64;
+  SlideshowTime: int64;
   VT: TVideoTransformer;
   VideoInfo: TVideoInfo;
 begin
@@ -756,7 +756,8 @@ begin
 
       if AdjustToAudio.Checked then
       begin
-        TimeImage := round((bme.AudioFileDuration - sl.Count * (TimeTransition-0.03)) /
+        TimeImage :=
+          round((bme.AudioFileDuration - sl.Count * (TimeTransition - 0.03)) /
           sl.Count);
         if MessageDlg('Calculated image time: ' + TimeImage.ToString + ' ms',
           mtConfirmation, [mbYes, mbNo], 0) = mrNo then

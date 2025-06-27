@@ -8,10 +8,10 @@
 // Release date: June 2025
 // =============================================================================
 // Requires: MFPack for SDK version 10.0.26100.0
-//           https://github.com/FactoryXCode/MfPack
+// https://github.com/FactoryXCode/MfPack
 // =============================================================================
 // Source: FactoryX.Code Sinkwriter and Transcode Examples.
-//         https://github.com/FactoryXCode/MfPack
+// https://github.com/FactoryXCode/MfPack
 // =============================================================================
 //
 // LICENSE
@@ -32,7 +32,6 @@
 // their product.
 //
 // =============================================================================
-
 
 unit uBitmaps2VideoWMF;
 
@@ -145,7 +144,6 @@ type
     fSampleDuration: DWord;
     fExactSampleDuration: double;
     fBrake: DWord;
-    fInputFormat: TGUID;
     pSinkWriter: IMFSinkWriter;
     pSourceReader: IMFSourceReader;
     pMediaTypeOut: IMFMediaType;
@@ -667,8 +665,7 @@ const
         CoUninitialize;
       hrStartUp := E_Fail;
       hrCoInit := E_Fail;
-      raise Exception.Create('Fail in call nr. ' + IntToStr(Count) + ' of ' +
-        ProcName + ' with result ' + IntToHex(hr, 8));
+      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x.8', [Count, ProcName, hr]);
     end;
   end;
 
@@ -709,8 +706,8 @@ begin
   fExactSampleDuration := 1000 * 10000 / fFrameRate;
   fSampleDuration := Trunc(fExactSampleDuration);
   fAudioStart := AudioStart * 10000;
-  fInputFormat := MFVideoFormat_RGB32;
   fBottomUp := BottomUp[Codec];
+  fSinkStreamIndexVideo := 0;
 
   fWriteStart := 0;
   fFrameCount := 0;
@@ -919,11 +916,12 @@ const
     inc(Count);
     if not succeeded(hr) then
     begin
-      err := IntToHex(hr);
+      err := IntToHex(
+        hr,
+        8);
       if succeeded(hrCoInit) then
         CoUninitialize;
-      raise Exception.Create('Fail in call nr. ' + IntToStr(Count) + ' of ' +
-        ProcName + ' with result ' + IntToHex(hr));
+      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x.8', [Count, ProcName, hr]);
     end;
   end;
 
@@ -1062,14 +1060,10 @@ end;
 
 procedure TBitmapEncoderWMF.AddVideo(
   const
-  VideoFile:
-  string;
-  TransitionTime:
-  integer = 0;
-  crop:
-  boolean = false;
-  stretch:
-  boolean = false);
+  VideoFile: string;
+  TransitionTime: integer = 0;
+  crop:           boolean = false;
+  stretch:        boolean = false);
 var
   VT: TVideoTransformer;
   bm: TBitmap;
@@ -1108,15 +1102,24 @@ begin
           crop,
           stretch);
         bmRGBAToSampleBuffer(fBmRGBA);
-        WriteOneFrame(
-          VideoStart + TimeStamp,
-          Duration);
+
+         WriteOneFrame(
+         VideoStart + TimeStamp,
+         Duration);
+
+        // Use the commented for extra hard synch-test:
+        // Write the decoded video stream in exactly the same way as AddFrame would.
+        // I.e. with the same timestamps, not taking any timestamps from the
+        // video-input
+//        WriteOneFrame(
+//          fWriteStart,
+//          fSampleDuration);
         if not VT.NextValidSampleToBitmap(bm, TimeStamp, Duration) then
           Break;
       end;
       // FrameCount*FrameTime > Video-end? (shouldn't differ by much)
-      if fWriteStart > VideoStart + TimeStamp + Duration then
-        Freeze((fWriteStart - VideoStart - TimeStamp - Duration) div 10000);
+       if fWriteStart > VideoStart + TimeStamp + Duration then
+       Freeze((fWriteStart - VideoStart - TimeStamp - Duration) div 10000);
     finally
       bm.Free;
     end;
@@ -1528,9 +1531,6 @@ var
   AudioTimestamp, AudioSampleDuration: int64;
   pAudioSample: IMFSample;
   Count: integer;
-  hr: HResult;
-label
-  Done;
 const
   ProcName = 'TBitmapEncoderWMF.WriteAudio';
   // is not used anymore, instead hr is returned
@@ -1541,19 +1541,18 @@ const
     begin
       if succeeded(hrCoInit) then
         CoUninitialize;
-      raise Exception.Create('Fail in call nr. ' + IntToStr(Count) + ' of ' +
-        ProcName + ' with result $' + IntToHex(hr));
+      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x', [Count, ProcName, hr]);
     end;
   end;
 
 begin
-  hr := S_OK;
+  result := S_OK;
   // If audio is present write audio samples up to the Video-timestamp + fReadAhead
   while (fAudioTime + fAudioStart < TimeStamp + fReadAhead) and
     (not fAudioDone) do
   begin
     // pull a sample out of the audio source reader
-    hr := pSourceReader.ReadSample(
+    result := pSourceReader.ReadSample(
       fAudioStreamIndex, // get a sample from audio stream
       0, // no source reader controller flags
       @ActualStreamIndex, // get actual index of the stream
@@ -1561,8 +1560,8 @@ begin
       @AudioTimestamp, // get the timestamp for this sample
       @pAudioSample); // get the actual sample
 
-    if not succeeded(hr) then
-      goto Done;
+    if not succeeded(result) then
+      exit;
 
     if ((flags and MF_SOURCE_READERF_STREAMTICK) <> 0) then
     begin
@@ -1585,36 +1584,34 @@ begin
     if (pAudioSample <> nil) then
     begin
 
-      hr := pAudioSample.GetSampleDuration(@AudioSampleDuration);
-      if not succeeded(hr) then
-        goto Done;
-      hr := pAudioSample.SetSampleTime(AudioTimestamp + fAudioStart);
-      if not succeeded(hr) then
-        goto Done;
-      hr := pAudioSample.SetSampleDuration(AudioSampleDuration);
-      if not succeeded(hr) then
-        goto Done;
+      result := pAudioSample.GetSampleDuration(@AudioSampleDuration);
+      if not succeeded(result) then
+        exit;
+      result := pAudioSample.SetSampleTime(AudioTimestamp + fAudioStart);
+      if not succeeded(result) then
+        exit;
+      result := pAudioSample.SetSampleDuration(AudioSampleDuration);
+      if not succeeded(result) then
+        exit;
       // send sample to sink-writer
-      hr := pSinkWriter.WriteSample(
+      result := pSinkWriter.WriteSample(
         fSinkStreamIndexAudio,
         pAudioSample);
-      if not succeeded(hr) then
-        goto Done;
+      if not succeeded(result) then
+        exit;
       // new end of sample time
       fAudioTime := AudioTimestamp + AudioSampleDuration;
     end;
-    // fAudioDuration can be false!
-    // if fAudioTime >= fAudioDuration then
-    // fAudioDone := true;
+    if fAudioTime > fAudioDuration then
+      fAudioDone := true;
     if fAudioDone then
-      hr := pSinkWriter.NotifyEndOfSegment(fSinkStreamIndexAudio);
+      result := pSinkWriter.NotifyEndOfSegment(fSinkStreamIndexAudio);
     // The following should not be necessary in Delphi,
     // since interfaces are automatically released,
     // but it fixes a memory leak when reading .mkv-files.
     SafeRelease(pAudioSample);
+    pAudioSample := nil;
   end;
-Done:
-  result := hr;
 end;
 
 procedure TBitmapEncoderWMF.WriteOneFrame(
@@ -1635,9 +1632,11 @@ const
     if not succeeded(hr) then
     begin
       if succeeded(hrCoInit) then
+      begin
         CoUninitialize;
-      raise Exception.Create('Fail in call nr. ' + IntToStr(Count) + ' of ' +
-        ProcName + ' with result $' + IntToHex(hr, 8));
+        hrCoInit := E_Fail;
+      end;
+      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x.8', [Count, ProcName, hr]);
     end;
   end;
 

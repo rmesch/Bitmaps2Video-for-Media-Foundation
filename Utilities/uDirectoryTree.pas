@@ -4,7 +4,7 @@
 //
 // Intiator(s): Renate Schaaf
 // Contributor(s): Renate Schaaf,
-//                 Tony Kalf (maXcomX) https://github.com/FactoryXCode/MfPack
+// Tony Kalf (maXcomX) https://github.com/FactoryXCode/MfPack
 //
 // Release date: June 2025
 // =============================================================================
@@ -41,9 +41,6 @@ interface
 
 uses
   WinApi.Windows,
-{$IF COMPILERVERSION >= 29.0}
-  WinApi.ShLwApi,
-{$ENDIF}
   VCL.ComCtrls,
   VCL.Controls,
   System.Classes,
@@ -78,7 +75,14 @@ type
       const aFileMask:   string);
   end;
 
+
+function StrCmpLogicalW(psz1, psz2: LPCWSTR)
+  : Integer; stdcall;
+{$EXTERNALSYM StrCmpLogicalW}
+
 implementation
+
+function StrCmpLogicalW; external 'shlwapi.dll' name 'StrCmpLogicalW';
 
 { TDirectoryTree }
 
@@ -126,12 +130,12 @@ end;
 
 procedure TDirectoryTree.CreateSubNodesToLevel2(aItem: TTreeNode);
 var
-  DirArraySize1, DirArraySize2, i, j: integer;
+  DirArraySize1, DirArraySize2, i, j: Integer;
   DirArray1, DirArray2: TStringDynArray;
   TreeItem, TreeItem2: TTreeNode;
   NewName: string;
-  FileAtr: integer;
-  DirectoryCount: integer;
+  FileAtr: Integer;
+  DirectoryCount: Integer;
   NodeData: PNodeData;
 begin
   if not assigned(aItem.Data) then
@@ -251,18 +255,15 @@ begin
   Result := PNodeData(aNode.Data).FullPath;
 end;
 
-{$IF COMPILERVERSION >= 29.0}
-
 function LogicalCompare(
   List:           TStringlist;
-  Index1, Index2: integer)
-  : integer;
+  Index1, Index2: Integer)
+  : Integer;
 begin
   Result := StrCmpLogicalW(
     PWideChar(List[Index1]),
     PWideChar(List[Index2]));
 end;
-{$ENDIF}
 
 
 procedure TDirectoryTree.GetAllFiles(
@@ -270,13 +271,9 @@ procedure TDirectoryTree.GetAllFiles(
   const aFileMask:   string);
 var
   FilePath, mask, SearchStr: string;
-  MaskLen, MaskPos, SepPos: integer;
-
-{$IF COMPILERVERSION < 30.0}
-  i: integer;
-  Strings: TArray<string>;
+  MaskLen, MaskPos, SepPos: Integer;
+  i: Integer;
   ClassicStrings: TStringDynArray;
-{$ENDIF}
 begin
   FilePath := IncludeTrailingBackSlash(GetFullFolderName(Selected));
   Assert(assigned(aStringList));
@@ -299,22 +296,13 @@ begin
         MaskPos + 1,
         MaskLen);
 
-{$IF COMPILERVERSION > 29.0}
-    aStringList.AddStrings(TDirectory.GetFiles(
-      FilePath,
-      SearchStr,
-      TSearchOption.soTopDirectoryOnly));
-{$ELSE}
     ClassicStrings := TDirectory.GetFiles(
       FilePath,
       SearchStr,
       TSearchOption.soTopDirectoryOnly);
     // Copy all fields to the new array
     for i := Low(ClassicStrings) to High(ClassicStrings) do
-      Strings[i] := ClassicStrings[i];
-
-    aStringList.AddStrings(Strings);
-{$ENDIF}
+      aStringList.Add(ClassicStrings[i]);
     if (SepPos >= 0) then
     begin
       inc(SepPos);
@@ -323,10 +311,8 @@ begin
     end;
     MaskPos := SepPos;
   end;
-{$IF COMPILERVERSION >= 29.0}
   // Natural sorting order, e.g. '7' '8' '9' '10'
   aStringList.CustomSort(LogicalCompare);
-{$ENDIF}
 end;
 
 end.
