@@ -25,7 +25,8 @@ Usage:
 
 Add the 4 files in the Source-directory to your project and the uses-clause of any unit using the encoder.
 The methods of the encoder-class are explained in the interface section of uBitmaps2VideoWMF.pas.
-To see examples of usage, run the demo-project DemoWMF in the Demo-folder.
+To see examples of usage, run the demo-project DemoWMF in the Demo-folder. The repo no longer contains dproj-files. 
+Before using the demo-project you should set the output directories to .\$(Platform)\$(Config) in the project options.
 
 Delphi-Versions:
 
