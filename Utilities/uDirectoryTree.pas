@@ -75,9 +75,9 @@ type
       const aFileMask:   string);
   end;
 
-
 function StrCmpLogicalW(psz1, psz2: LPCWSTR)
   : Integer; stdcall;
+
 {$EXTERNALSYM StrCmpLogicalW}
 
 implementation
@@ -265,7 +265,6 @@ begin
     PWideChar(List[Index2]));
 end;
 
-
 procedure TDirectoryTree.GetAllFiles(
   const aStringList: TStringlist;
   const aFileMask:   string);
@@ -303,6 +302,9 @@ begin
     // Copy all fields to the new array
     for i := Low(ClassicStrings) to High(ClassicStrings) do
       aStringList.Add(ClassicStrings[i]);
+    SetLength(
+      ClassicStrings,
+      0);
     if (SepPos >= 0) then
     begin
       inc(SepPos);
