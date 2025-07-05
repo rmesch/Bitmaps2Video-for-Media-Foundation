@@ -1,3 +1,5 @@
+
+
 # Bitmaps2Video for Media Foundation
 
  A VCL-based Delphi-class to encode a series of bitmaps and video-clips together with an audio file to video using the Windows Mediafoundation-API.
@@ -38,7 +40,7 @@ To see examples of usage, run the demo-project DemoWMF in the Demo-folder. The r
 Before using the demo-project you should set the output directories to .\$(Platform)\$(Config) in the project options.
 
 
-
+https://github.com/user-attachments/assets/76ef1f8a-45e1-43a0-87b1-4b4c86ac3f22
 
 
 
