@@ -41,8 +41,4 @@ Before using the demo-project you should set the output directories to .\$(Platf
 
 
 
-https://github.com/user-attachments/assets/1765b808-7125-4439-a797-1501ee5d4996
-
-
-
 
