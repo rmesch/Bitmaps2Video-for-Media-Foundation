@@ -38,3 +38,7 @@ To see examples of usage, run the demo-project DemoWMF in the Demo-folder. The r
 Before using the demo-project you should set the output directories to .\$(Platform)\$(Config) in the project options.
 
 
+
+https://github.com/user-attachments/assets/9d5f7977-4fa1-4d5d-b1cd-18bd47810861
+
+
