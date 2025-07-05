@@ -54,6 +54,7 @@ uses
   System.IOUtils,
   System.Threading,
   System.UITypes,
+  System.StrUtils,
 
   VCL.Graphics,
   VCL.Controls,
@@ -205,6 +206,14 @@ type
     CodecInfo: TStaticText;
     OutputInfo: TStaticText;
     AdjustToAudio: TCheckBox;
+    TabSheet5: TTabSheet;
+    Memo3: TMemo;
+    Button5: TButton;
+    Button6: TButton;
+    FSDText: TFileSaveDialog;
+    Button7: TButton;
+    Label21: TLabel;
+    Edit1: TEdit;
 
     // Important procedure showing the use of TBitmapEncoderWMF
     procedure WriteAnimationClick(Sender: TObject);
@@ -237,6 +246,10 @@ type
     procedure AdvancedOptionsClick(Sender: TObject);
     procedure PictureBoxPaint(Sender: TObject);
     procedure PanelPreviewResize(Sender: TObject);
+    procedure Button5Click(Sender: TObject);
+    procedure Button6Click(Sender: TObject);
+    procedure Button7Click(Sender: TObject);
+    procedure Edit1Click(Sender: TObject);
   private
     fDirectoryTree: TDirectoryTree;
     fFileList: TStringlist;
@@ -265,7 +278,7 @@ type
       threaded:                  boolean;
       ImageTime, TransitionTime: integer);
 
-    function GetFrameRate: single;
+    function GetFrameRate: double;
     function GetDoCrop: boolean;
     function GetDoZoomInOut: boolean;
     function GetVideoHeight: integer;
@@ -291,6 +304,9 @@ type
       const VideoInfo: TVideoInfo);
     function GetGPUPriority: word;
     function GetAdvancedOptions: TEncoderAdvancedOptions;
+    procedure ProcessFile(
+      const FileN:         string;
+      const VideoFileName: string);
     { Private-Deklarationen }
   public
     // properties which read the input parameters for the bitmap-encoder
@@ -299,7 +315,7 @@ type
     property Aspect: double read GetAspect;
     property VideoHeight: integer read GetVideoHeight;
     property VideoWidth: integer read GetVideoWidth;
-    property FrameRate: single read GetFrameRate;
+    property FrameRate: double read GetFrameRate;
     property Quality: integer read GetQuality;
     property EncodePriority: word read GetGPUPriority;
     property DoCrop: boolean read GetDoCrop;
@@ -1123,6 +1139,166 @@ begin
   fUserAbort := true;
 end;
 
+procedure TDemoWMFMain.ProcessFile(
+  const FileN:         string;
+  const VideoFileName: string);
+var
+  StrList: TStringlist;
+  Line: string;
+  i, p: integer;
+  DurationString: string;
+begin
+  Memo3.Clear;
+  Memo3.Lines.Add(ExtractFilename(VideoFileName));
+  StrList := TStringlist.Create;
+  try
+    StrList.LineBreak := '[/FRAME]'#13#10;
+    StrList.LoadFromFile(FileN);
+    if StrList.Count = 0 then
+      exit;
+    Memo3.Lines.BeginUpdate;
+    try
+      for i := 0 to StrList.Count - 1 do
+      begin
+        Line := StrList[i];
+        p := PosEx(
+          'duration_time',
+          Line);
+        DurationString := Copy(
+          Line,
+          p,
+          PosEx('pkt_pos', Line) - p - 1);
+        p := PosEx(
+          'pkt_dts',
+          Line);
+        if p > 0 then
+          Line := LeftStr(
+            Line,
+            p - 1);
+        if Length(Line) > Length('[FRAME] media_type=') then
+          Line := RightStr(
+            Line,
+            Length(Line) - Length('[FRAME] media_type=') - 1);
+        Line := ReplaceStr(
+          Line,
+          #13#10,
+          ' ') + ' ' + DurationString;
+        Memo3.Lines.Add(Line);
+      end;
+    finally
+      Memo3.Lines.EndUpdate;
+    end;
+  finally
+    StrList.Free;
+  end;
+end;
+
+procedure TDemoWMFMain.Button5Click(Sender: TObject);
+var
+  Sei: TShellExecuteInfo;
+  Success: boolean;
+  ffProbePath: string;
+begin
+  if fWriting or (not System.SysUtils.FileExists(OutputFilename)) then
+  begin
+    ShowMessage('Output file has not been generated');
+    exit;
+  end;
+
+  ffProbePath := ExtractFilePath(Application.ExeName);
+  TDirectory.SetCurrentDirectory(ffProbePath);
+
+  DeleteFile('AVFrames.txt');
+
+  FillChar(
+    Sei,
+    SizeOf(Sei),
+    #0);
+  Sei.cbSize := SizeOf(Sei);
+  Sei.fMask := SEE_MASK_DOENVSUBST or SEE_MASK_FLAG_NO_UI or
+    SEE_MASK_NOCLOSEPROCESS;
+  Sei.lpFile := PChar('cmd.exe');
+  Sei.lpParameters := PChar('/c ffprobe.exe -show_frames ' + '"' +
+    OutputFileName + '" > AVframes.txt');
+  Sei.lpVerb := PChar('');
+  Sei.nShow := SW_Hide;
+  Status.Caption := 'Working';
+  Success := ShellExecuteEx(@Sei);
+  if Success then
+  begin
+    WaitForInputIdle(
+      Sei.hProcess,
+      INFINITE);
+    WaitForSingleObject(
+      Sei.hProcess,
+      INFINITE);
+    CloseHandle(Sei.hProcess);
+    ProcessFile(
+      'AVFrames.txt',
+      OutputFileName);
+    Status.Caption := 'Done';
+  end
+  else
+    Status.Caption := 'Failed';
+end;
+
+procedure TDemoWMFMain.Button6Click(Sender: TObject);
+var
+  ffProbePath: string;
+begin
+  ffProbePath := ExtractFilePath(Application.ExeName);
+  TDirectory.SetCurrentDirectory(ffProbePath);
+  FSDText.DefaultFolder := ffProbePath;
+  if not FSDText.Execute then
+    exit;
+  Memo3.Lines.SaveToFile(FSDText.fileName);
+end;
+
+procedure TDemoWMFMain.Button7Click(Sender: TObject);
+var
+  Sei: TShellExecuteInfo;
+  Success: boolean;
+  ffProbePath: string;
+begin
+  if not FODVideo.Execute then
+    exit;
+  ffProbePath := ExtractFilePath(Application.ExeName);
+  TDirectory.SetCurrentDirectory(ffProbePath);
+
+  DeleteFile('AVFrames.txt');
+
+  FillChar(
+    Sei,
+    SizeOf(Sei),
+    #0);
+  Sei.cbSize := SizeOf(Sei);
+  Sei.fMask := SEE_MASK_DOENVSUBST or SEE_MASK_FLAG_NO_UI or
+    SEE_MASK_NOCLOSEPROCESS;
+  Sei.lpFile := PChar('cmd.exe');
+  Sei.lpParameters := PChar('/c ffprobe.exe -show_frames ' + '"' +
+    FODVideo.fileName + '" > AVframes.txt');
+  Sei.lpVerb := PChar('');
+  Sei.nShow := SW_Hide;
+  Status.Caption := 'Working';
+  Success := ShellExecuteEx(@Sei);
+  if Success then
+  begin
+    WaitForInputIdle(
+      Sei.hProcess,
+      INFINITE);
+    WaitForSingleObject(
+      Sei.hProcess,
+      INFINITE);
+    CloseHandle(Sei.hProcess);
+    ProcessFile(
+      'AVFrames.txt',
+      FODVideo.fileName);
+    Status.Caption := 'Done';
+  end
+  else
+    Status.Caption := 'Failed';
+end;
+
 procedure TDemoWMFMain.PickAudioClick(Sender: TObject);
 begin
   AudioFileName.Caption := AudioFile;
@@ -1146,7 +1322,7 @@ begin
   FileBox.Clear;
   for i := 0 to fFileList.Count - 1 do
   begin
-    FileBox.Items.Add(ExtractFileName(fFileList.Strings[i]));
+    FileBox.Items.Add(ExtractFilename(fFileList.Strings[i]));
   end;
   FileBox.SelectAll;
   FileBoxSelChange(nil);
@@ -1185,6 +1361,17 @@ procedure TDemoWMFMain.DoUpdate(var msg: TMessage);
 begin
   Status.Caption := 'Image ' + (msg.WParam + 1).ToString;
   Status.Repaint;
+end;
+
+procedure TDemoWMFMain.Edit1Click(Sender: TObject);
+begin
+  ShellExecute(
+      Handle,
+      'open',
+      PWideChar(edit1.text),
+      nil,
+      nil,
+      SW_SHOWNORMAL);
 end;
 
 procedure TDemoWMFMain.FileExtChange(Sender: TObject);
@@ -1346,9 +1533,9 @@ begin
 end;
 
 const
-  FrameRateArray: array [0 .. 6] of single = (25, 29.97, 30, 45, 60, 90, 120);
+  FrameRateArray: array [0 .. 8] of double = (25, 29.97, 30, 31.25,45, 46.875, 60, 90, 120);
 
-function TDemoWMFMain.GetFrameRate: single;
+function TDemoWMFMain.GetFrameRate: double;
 begin
   Result := FrameRateArray[FrameRates.ItemIndex];
 end;
@@ -1421,7 +1608,7 @@ begin
   try
     VideoInfo := GetVideoInfo(FODVideo.fileName);
   except
-    ShowMessage('Video format of ' + ExtractFileName(FODVideo.fileName) +
+    ShowMessage('Video format of ' + ExtractFilename(FODVideo.fileName) +
       ' is not supported');
     exit;
   end;

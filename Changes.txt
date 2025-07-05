@@ -1,3 +1,8 @@
+2025-07-06
+Some rework of writing the audio stream. Streams always start at time 0, by padding with silence. 2 new framerates to optimize synching to audio.
+
+Added a hidden tab "Analysis" to the demo for displaying info about the frame-timing in the output-video. Requires the ffmeg-tool ffprobe.exe, info for download is displayed once you enable the tab.
+
 2025-06-28
 Fixed some bugs occurring under Delphi XE7/8
 

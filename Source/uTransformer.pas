@@ -9,6 +9,9 @@
 // =============================================================================
 // Requires: MFPack for SDK version 10.0.26100.0
 //           https://github.com/FactoryXCode/MfPack
+//           Windows 8 or higher with possible restrictions, untested
+//           Windows 10 or higher for all features
+//           Incompatible with Windows 7 or lower
 // =============================================================================
 // Source: FactoryX.Code Sinkwriter and Transcode Examples.
 //         https://github.com/FactoryXCode/MfPack
@@ -199,7 +202,7 @@ const
     if not succeeded(hr) then
     begin
       err := '$' + IntToHex(hr, 8);
-      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x.8', [Count, ProcName, hr]);
+      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x', [Count, ProcName, hr]);
     end;
   end;
 
@@ -415,7 +418,7 @@ const
     inc(Count);
     if not succeeded(hr) then
     begin
-      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x.8', [Count, ProcName, hr]);
+      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x', [Count, ProcName, hr]);
     end;
   end;
 
@@ -451,6 +454,7 @@ begin
     // Enable the source-reader to make color-conversion, change video size, frame-rate and interlace-mode
     CheckFail(attribs.SetUINT32
       (MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, UInt32(true)));
+
     // The next was an attempt to enable hardware decoding, but
     // it doesn't work for the target mediatype MFVideoFormat_RGB32
 
@@ -466,10 +470,9 @@ begin
     CheckFail(MFCreateMediaType(pPartialType));
     CheckFail(pPartialType.SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video));
     CheckFail(pPartialType.SetGUID(MF_MT_SUBTYPE, MFVideoFormat_RGB32));
-    CheckFail(pPartialType.SetUINT32(MF_MT_INTERLACE_MODE, 2));
-    // 2=progressive.
+    CheckFail(pPartialType.SetUINT32(MF_MT_INTERLACE_MODE, 2)); // 2=progressive.
     CheckFail(MFSetAttributeRatio(pPartialType, MF_MT_FRAME_RATE,
-      round(fNewFrameRate * 1000), 1000));
+      round(fNewFrameRate * 1000000), 1000000));
 
     fNewWidth := round(fNewHeight * fVideoInfo.VideoWidth /
       fVideoInfo.VideoHeight * fVideoInfo.PixelAspect);
@@ -530,7 +533,7 @@ const
     inc(Count);
     if not succeeded(hr) then
     begin
-      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x.8', [Count, ProcName, hr]);
+      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x', [Count, ProcName, hr]);
     end;
   end;
 
@@ -603,7 +606,7 @@ const
     inc(Count);
     if not succeeded(hr) then
     begin
-     raise Exception.CreateFmt('Fail in call no. %d of %s with result %x.8', [Count, ProcName, hr]);
+     raise Exception.CreateFmt('Fail in call no. %d of %s with result %x', [Count, ProcName, hr]);
     end;
   end;
 
@@ -679,7 +682,7 @@ const
     if not succeeded(hr) then
     begin
       err := '$' + IntToHex(hr, 8);
-      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x.8', [Count, ProcName, hr]);
+      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x', [Count, ProcName, hr]);
     end;
   end;
 

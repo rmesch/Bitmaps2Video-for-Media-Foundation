@@ -146,7 +146,7 @@ object DemoWMFMain: TDemoWMFMain
     end
     object FrameRates: TComboBox
       Left = 8
-      Top = 332
+      Top = 330
       Width = 171
       Height = 23
       Style = csDropDownList
@@ -157,7 +157,9 @@ object DemoWMFMain: TDemoWMFMain
         '25'
         '29.97'
         '30'
+        '31.25 (good for 48000 audio)'
         '45'
+        '46.875 (optimal for 48000 audio)'
         '60'
         '90'
         '120')
@@ -180,8 +182,8 @@ object DemoWMFMain: TDemoWMFMain
       Align = alBottom
       TabOrder = 7
       object ShowVideo: TButton
-        Left = 74
-        Top = 150
+        Left = 82
+        Top = 156
         Width = 111
         Height = 27
         Caption = 'Play output video'
@@ -950,7 +952,7 @@ object DemoWMFMain: TDemoWMFMain
         end
         object CombineToVideo: TButton
           Left = 9
-          Top = 190
+          Top = 188
           Width = 137
           Height = 25
           Caption = 'Combine to video'
@@ -1094,6 +1096,80 @@ object DemoWMFMain: TDemoWMFMain
           Height = 17
           Caption = 'StretchToAspect'
           TabOrder = 6
+        end
+      end
+      object TabSheet5: TTabSheet
+        Caption = 'Analysis'
+        ImageIndex = 4
+        TabVisible = False
+        DesignSize = (
+          771
+          535)
+        object Label21: TLabel
+          Left = 10
+          Top = 16
+          Width = 449
+          Height = 33
+          AutoSize = False
+          Caption = 
+            'To run this analysis the program ffprobe.exe needs to be in the ' +
+            'output directory of DemoWMFMain.exe. The application can be down' +
+            'loaded from'
+          WordWrap = True
+        end
+        object Memo3: TMemo
+          Left = 1
+          Top = 114
+          Width = 770
+          Height = 419
+          Anchors = [akLeft, akTop, akRight, akBottom]
+          Lines.Strings = (
+            'Memo3')
+          ScrollBars = ssBoth
+          TabOrder = 0
+        end
+        object Button5: TButton
+          Left = 3
+          Top = 74
+          Width = 192
+          Height = 25
+          Caption = 'Run Frame Analysis on Output'
+          TabOrder = 1
+          OnClick = Button5Click
+        end
+        object Button6: TButton
+          Left = 384
+          Top = 74
+          Width = 113
+          Height = 25
+          Caption = 'Save Analysis to File'
+          TabOrder = 2
+          OnClick = Button6Click
+        end
+        object Button7: TButton
+          Left = 206
+          Top = 74
+          Width = 156
+          Height = 25
+          Caption = 'Run Frame Analysis on File'
+          TabOrder = 3
+          OnClick = Button7Click
+        end
+        object Edit1: TEdit
+          Left = 465
+          Top = 24
+          Width = 270
+          Height = 23
+          Cursor = crHandPoint
+          Font.Charset = DEFAULT_CHARSET
+          Font.Color = clNavy
+          Font.Height = -12
+          Font.Name = 'Segoe UI'
+          Font.Style = [fsUnderline]
+          ParentFont = False
+          TabOrder = 4
+          Text = 'https://www.gyan.dev/ffmpeg/builds/'
+          OnClick = Edit1Click
         end
       end
     end
@@ -1302,5 +1378,17 @@ object DemoWMFMain: TDemoWMFMain
       8003000000000000800300000000000080030000000000008003000000000000
       8003000000000000C00700000000000000000000000000000000000000000000
       000000000000}
+  end
+  object FSDText: TFileSaveDialog
+    DefaultExtension = '.txt'
+    FavoriteLinks = <>
+    FileTypes = <
+      item
+        DisplayName = 'Text'
+        FileMask = '*.txt'
+      end>
+    Options = []
+    Left = 794
+    Top = 121
   end
 end

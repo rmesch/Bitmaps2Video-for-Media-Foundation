@@ -11,6 +11,10 @@
 // Thanks:
 // To A.Melander, M.Lischke, E.Grange
 // for code inspiring this resampling tool.
+// Special thanks to Anders Melander for helpful discussions about the
+// alpha-channel on
+// https://en.delphipraxis.net/
+//==============================================================================
 // =============================================================================
 //
 // LICENSE
