@@ -1,3 +1,6 @@
+2025-07-08
+Audio-synching is optimal if the audio-input comes from a .wav-file. You can use the utility uTransformer.SaveAudioStreamAsWav to transform an audio-file or the 1st audio-stream of a video-file to a wav-file before initializing encoding. To try this out in the demo some checkboxes have been added.
+
 2025-07-06
 Some rework of writing the audio stream. Streams always start at time 0, by padding with silence. 2 new framerates to optimize synching to audio.
 

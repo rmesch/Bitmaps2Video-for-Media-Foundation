@@ -19,7 +19,7 @@
 // =============================================================================
 // Special thanks to Kas Ob for very helpful insight given on
 // https://en.delphipraxis.net/
-//==============================================================================
+// ==============================================================================
 //
 // LICENSE
 //
@@ -73,7 +73,7 @@ uses
   WinApi.MediaFoundationApi.CodecApi,
   WinApi.ActiveX.PropIdl,
   WinApi.MediaFoundationApi.MfIdl,
-
+  WinApi.WinMM.MMeApi,
   // parallel bitmap resampler
   uScaleWMF,
   uScaleCommonWMF,
@@ -156,10 +156,11 @@ type
     pMediaTypeOut: IMFMediaType;
     pMediaTypeIn: IMFMediaType;
     pAudioTypeIn, pAudioTypeOut, pAudioTypeNative: IMFMediaType;
-    pSampleBuffer, pSampleBufferAudio: IMFMediaBuffer;
+    pSampleBuffer, pSampleBufferSilence: IMFMediaBuffer;
     fBufferSizeVideo, fBufferSizeAudio: DWord;
     fSinkStreamIndexVideo, fSinkStreamIndexAudio: DWord;
     fAudioDuration, fAudioTime, fAudioFrameDuration, fSilenceTime: int64;
+    fExactAudioFrameDuration: double;
     fAudioDone: boolean;
     hrCoInit, hrStartUp: HResult;
     fFileName, fAudioFileName: string;
@@ -179,6 +180,7 @@ type
     fAudioBytesPerSecond: DWord;
     fAudioBlockAlign: DWord;
     fAudioStreamIndex: DWord;
+    fAudioByteStream: TFileStream;
 
     fBmRGBA: TBitmap;
     fOnProgress: TBitmapEncoderProgressEvent;
@@ -209,15 +211,13 @@ type
       const AudioFileName:                        string;
       AudioSampleRate, AudioBitrate, StreamIndex: DWord);
 
-    function SilenceBufferSize(Duration: int64)
-      : DWord;
-    function AudioDuration(PCMSamples: DWord)
-      : int64;
-    function GetAudioDuration: int64;
     function WriteSilence(
-      TimeStamp: int64;
-      Duration:  int64)
-      : HResult;
+  TimeStamp: int64;
+  Duration:  int64)
+  : HResult;
+
+  function GetAudioDuration: int64;
+
 
     // not working at the moment
     // function GetEncodingStats: TVideoStats;
@@ -361,9 +361,12 @@ procedure TranscodeVideoFile(
   EncodePriority:                      word;
   crop:                                boolean = false;
   stretch:                             boolean = false;
+  ConvertToWav:                        boolean = false;
   OnProgress:                          TBitmapEncoderProgressEvent = nil);
 
 implementation
+
+uses VCL.Forms;
 
 procedure TranscodeVideoFile(
   const InputFilename, OutputFilename: string;
@@ -374,19 +377,30 @@ procedure TranscodeVideoFile(
   EncodePriority:                      word;
   crop:                                boolean = false;
   stretch:                             boolean = false;
+  ConvertToWav:                        boolean = false;
   OnProgress:                          TBitmapEncoderProgressEvent = nil);
 var
   bme: TBitmapEncoderWMF;
   VideoInfo: TVideoInfo;
-  audiofile: string;
+  audiofile, wavefile: string;
 begin
   VideoInfo := GetVideoInfo(InputFilename);
   // check if video has an audio stream
   if VideoInfo.AudioStreamCount = 0 then
     audiofile := ''
   else
-  // use the 1st audio-stream of the input file as audio
+  begin
+    // use the 1st audio-stream of the input file as audio
     audiofile := InputFilename;
+    if ConvertToWav then
+    begin
+      wavefile := ExtractFilePath(Application.ExeName) + 'Convert.wav';
+      SaveAudioStreamAsWav(
+        audiofile,
+        wavefile);
+      audiofile := wavefile;
+    end;
+  end;
   bme := TBitmapEncoderWMF.Create;
   try
     bme.Initialize(
@@ -632,19 +646,6 @@ const
   nIntermediateVideoFormats = 4;
   nIntermediateAudioFormats = 2;
 
-function TBitmapEncoderWMF.SilenceBufferSize(Duration: int64)
-  : DWord;
-begin
-  result := Ceil(fAudioBytesPerSecond / 1000 * Duration / 10000);
-  result := fAudioBlockAlign * max(result div fAudioBlockAlign, 1);
-end;
-
-function TBitmapEncoderWMF.AudioDuration(PCMSamples: DWord)
-  : int64;
-begin
-  result := Trunc(PCMSamples / fAudioSampleRate * 1000 * 10000);
-end;
-
 constructor TBitmapEncoderWMF.Create;
 begin
   // leave enough processors for the encoding threads
@@ -696,6 +697,7 @@ const
 
 begin
   Count := 0;
+  fAudioByteStream := nil;
   if fInitialized then
     raise Exception.Create
       ('The bitmap-encoder must be finalized before re-initializing');
@@ -1013,8 +1015,8 @@ begin
   CheckFail(pPartialType.SetUINT32(MF_MT_AUDIO_SAMPLES_PER_SECOND,
     fAudioSampleRate));
   CheckFail(pPartialType.SetUINT32(MF_MT_AUDIO_NUM_CHANNELS, 2));
-  CheckFail(pPartialType.SetUINT32(MF_MT_ALL_SAMPLES_INDEPENDENT,
-    Uint32(true)));
+  // CheckFail(pPartialType.SetUINT32(MF_MT_ALL_SAMPLES_INDEPENDENT,
+  // Uint32(true)));
 
   // set the partial media type on the source stream
   // if this is successful, the reader can deliver uncompressed samples
@@ -1050,19 +1052,20 @@ begin
   // Create an audio-buffer that holds silence
   // the buffer should hold audio for the  audio frame time,
   // which is the time for 1024 PCM-samples
-  fAudioFrameDuration := AudioDuration(1024);
-  fBufferSizeAudio := SilenceBufferSize(fAudioFrameDuration);
-  CheckFail(MFCreateMemoryBuffer(fBufferSizeAudio, pSampleBufferAudio));
-  CheckFail(pSampleBufferAudio.SetCurrentLength(fBufferSizeAudio));
-  CheckFail(pSampleBufferAudio.Lock(pData, nil, nil));
+  fExactAudioFrameDuration := 1024 / fAudioSampleRate * 1000 * 10000;
+  fAudioFrameDuration := Trunc(fExactAudioFrameDuration);
+  fBufferSizeAudio := 4 * 1024; // SilenceBufferSize(fAudioFrameDuration);
+  CheckFail(MFCreateMemoryBuffer(fBufferSizeAudio, pSampleBufferSilence));
+  CheckFail(pSampleBufferSilence.SetCurrentLength(fBufferSizeAudio));
+  CheckFail(pSampleBufferSilence.Lock(pData, nil, nil));
   FillChar(
     pData^,
     fBufferSizeAudio,
     0);
   // prevent crack at beginnning of silence
   PByteArray(pData)[2] := $06;
-  CheckFail(pSampleBufferAudio.Unlock);
-  CheckFail(pSampleBufferAudio.SetCurrentLength(fBufferSizeAudio));
+  CheckFail(pSampleBufferSilence.Unlock);
+  CheckFail(pSampleBufferSilence.SetCurrentLength(fBufferSizeAudio));
 
   // when the first audio sample is encoded we
   // add Silence to fill any gap at the beginning of audio
@@ -1077,13 +1080,14 @@ begin
     pSinkWriter.Finalize();
   SafeRelease(pSinkWriter);
   SafeRelease(pSourceReader);
-
+  fAudioByteStream.Free;
+  fAudioByteStream := nil;
   if Assigned(pSampleBuffer) then
     pSampleBuffer.SetCurrentLength(0);
   SafeRelease(pSampleBuffer);
-  if Assigned(pSampleBufferAudio) then
-    pSampleBufferAudio.SetCurrentLength(0);
-  SafeRelease(pSampleBufferAudio);
+  if Assigned(pSampleBufferSilence) then
+    pSampleBufferSilence.SetCurrentLength(0);
+  SafeRelease(pSampleBufferSilence);
   if succeeded(hrStartUp) then
     MfShutDown();
   if succeeded(hrCoInit) then
@@ -1524,7 +1528,7 @@ begin
     fact := 255 / 10000 / EffectTime;
     while EndTime - fWriteStart > 0 do
     begin
-      alpha := Round((fact * (fWriteStart - StartTime)));
+      alpha := round((fact * (fWriteStart - StartTime)));
       Alphablend(
         bmOld,
         bmNew,
@@ -1567,7 +1571,7 @@ begin
   if succeeded(result) then
     result := MFCreateSample(pSampleAudio);
   if succeeded(result) then
-    result := pSampleAudio.AddBuffer(pSampleBufferAudio);
+    result := pSampleAudio.AddBuffer(pSampleBufferSilence);
   if succeeded(result) then
     result := pSampleAudio.SetSampleTime(TimeStamp);
   if succeeded(result) then
@@ -1577,7 +1581,7 @@ begin
       fSinkStreamIndexAudio,
       pSampleAudio);
   if succeeded(result) then
-    result := pSampleBufferAudio.SetCurrentLength(fBufferSizeAudio);
+    result := pSampleBufferSilence.SetCurrentLength(fBufferSizeAudio);
   SafeRelease(pSampleAudio);
 end;
 
@@ -1598,6 +1602,7 @@ begin
   result := S_OK;
   pBuffer := nil;
   pAudioSample := nil;
+  AudioBufferSize := 0;
   // If audio is present write audio samples up to the Video-timestamp
   while (fAudioTime + fAudioStart < TimeStamp) and
     (not fAudioDone) do
@@ -1748,7 +1753,7 @@ begin
         if succeeded(hr) then
           hr := MFCreateSample(pSampleAudio);
         if succeeded(hr) then
-          hr := pSampleAudio.AddBuffer(pSampleBufferAudio);
+          hr := pSampleAudio.AddBuffer(pSampleBufferSilence);
         if succeeded(hr) then
           hr := pSampleAudio.SetSampleTime(fSilenceTime);
         if succeeded(hr) then
@@ -1758,19 +1763,20 @@ begin
             fSinkStreamIndexAudio,
             pSampleAudio);
         if succeeded(hr) then
-          hr := pSampleBufferAudio.SetCurrentLength(fBufferSizeAudio);
+          hr := pSampleBufferSilence.SetCurrentLength(fBufferSizeAudio);
         SafeRelease(pSampleAudio);
         fSilenceTime := fSilenceTime + fAudioFrameDuration;
       end;
       CheckFail(hr);
     end
-    // is the next video-timestamp later than audiotime written so far?
-    else if (TimeStamp > fAudioTime + fAudioStart) and
-      (not fAudioDone) then
-      // write audio until audio time is >= video-timestamp
-      hr := WriteAudio(
-        TimeStamp,
-        AudioBufferSize);
+    else
+      // is the next video-timestamp later than audiotime written so far?
+      if (TimeStamp > fAudioTime + fAudioStart) and
+        (not fAudioDone) then
+        // write audio until audio time is >= video-timestamp
+        hr := WriteAudio(
+          TimeStamp,
+          AudioBufferSize);
   end;
 
   // Create a media sample and add the buffer to the sample.
@@ -1933,7 +1939,7 @@ begin
 
       // HandleThreadMessages(GetCurrentThread,1);
 
-      alpha := Round(255 * t);
+      alpha := round(255 * t);
       Alphablend(
         RGBATweenSource,
         RGBATweenTarget,

@@ -8,13 +8,13 @@
 // Release date: June 2025
 // =============================================================================
 // Requires: MFPack for SDK version 10.0.26100.0
-//           https://github.com/FactoryXCode/MfPack
-//           Windows 8 or higher with possible restrictions, untested
-//           Windows 10 or higher for all features
-//           Incompatible with Windows 7 or lower
+// https://github.com/FactoryXCode/MfPack
+// Windows 8 or higher with possible restrictions, untested
+// Windows 10 or higher for all features
+// Incompatible with Windows 7 or lower
 // =============================================================================
 // Source: FactoryX.Code Sinkwriter and Transcode Examples.
-//         https://github.com/FactoryXCode/MfPack
+// https://github.com/FactoryXCode/MfPack
 // =============================================================================
 //
 // LICENSE
@@ -73,6 +73,7 @@ uses
   WinApi.MediaFoundationApi.CodecApi,
   WinApi.ActiveX.PropIdl,
   WinApi.MediaFoundationApi.MfIdl,
+  WinApi.WinMM.MMeApi,
   WinApi.ActiveX.PropVarUtil,
   WinApi.WinApiTypes;
 
@@ -155,8 +156,254 @@ function SetTimerResolution(
   var SetResolution: UInt32)
   : HResult;
 
+function SaveAudioStreamAsWav(
+  const InputFileName:  string;
+  const OutputFilename: string)
+  : boolean;
 
 implementation
+
+function SaveAudioStreamAsWav(
+  const InputFileName:  string;
+  const OutputFilename: string)
+  : boolean;
+var
+  hrCoInit, hrStartUp: HResult;
+  Count: integer;
+  pSourceReader: IMFSourceReader;
+  pAudioTypeNative, pPartialType, pAudioTypeIn: IMFMediaType;
+  AudioStreamIndex, ActualStreamIndex: DWord;
+  AudioSampleRate: UInt32;
+  pBuffer: IMFMediaBuffer;
+  pAudioSample: IMFSample;
+  AudioDone: boolean;
+  WaveStream: TFileStream;
+  cbFormat: UInt32;
+  header: array [0 .. 4] of DWord;
+  pWav: PWAVEFORMATEX;
+  dataHeader: array [0 .. 1] of DWord;
+  AudioBytesWritten, FileSize: DWord;
+  flags: DWord;
+  AudioTimestamp: int64;
+  pData: pByte;
+  AudioBufferSize: DWord;
+  FirstAudioSample: boolean;
+  SilenceBuffer: array of byte;
+  SilenceBufferSize: DWord;
+
+const
+  ProcName = 'SaveAudioStreamAsWav';
+  procedure CheckFail(hr: HResult);
+  begin
+    inc(Count);
+    if not succeeded(hr) then
+    begin
+      if succeeded(hrStartUp) then
+        MfShutDown();
+      if succeeded(hrCoInit) then
+        CoUninitialize;
+      hrStartUp := E_Fail;
+      hrCoInit := E_Fail;
+      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x',
+        [Count, ProcName, hr]);
+    end;
+  end;
+
+begin
+  Count := 0;
+  Result := false;
+  hrCoInit := CoInitializeEx(
+    nil,
+    COINIT_APARTMENTTHREADED or
+    COINIT_DISABLE_OLE1DDE);
+  CheckFail(hrCoInit);
+
+  hrStartUp := MFStartup(MF_VERSION);
+  CheckFail(hrStartUp);
+
+  // Create a source-reader to read the audio file
+  CheckFail(MFCreateSourceReaderFromURL(PWideChar(InputFileName), nil,
+    pSourceReader));
+  // Find the first audio-stream and read its native media type
+  AudioStreamIndex := MF_SOURCE_READER_FIRST_AUDIO_STREAM;
+  CheckFail(pSourceReader.GetNativeMediaType(
+    AudioStreamIndex,
+    0,
+    pAudioTypeNative));
+
+  // Use the same sample-rate as the input-file
+  CheckFail(pAudioTypeNative.GetUInt32(MF_MT_AUDIO_SAMPLES_PER_SECOND,
+    AudioSampleRate));
+
+  // Create a partial uncompressed media type with the specs the reader should decode to
+  CheckFail(MFCreateMediaType(pPartialType));
+
+  // set the major type of the partial type. BitsPerSample=16, nChannels=2 hardwired.
+  CheckFail(pPartialType.SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio));
+  CheckFail(pPartialType.SetGUID(MF_MT_SUBTYPE, MFAudioFormat_PCM));
+  CheckFail(pPartialType.SetUINT32(MF_MT_AUDIO_BITS_PER_SAMPLE, 16));
+  CheckFail(pPartialType.SetUINT32(MF_MT_AUDIO_SAMPLES_PER_SECOND,
+    AudioSampleRate));
+  CheckFail(pPartialType.SetUINT32(MF_MT_AUDIO_NUM_CHANNELS, 2));
+
+  // set the partial media type on the source stream
+  // if this is successful, the reader can deliver uncompressed samples
+  // in the given format
+  CheckFail(pSourceReader.SetCurrentMediaType(AudioStreamIndex, 0,
+    pPartialType));
+  // Read the full uncompressed input type off the reader
+  CheckFail(pSourceReader.GetCurrentMediaType(AudioStreamIndex, pAudioTypeIn));
+  // The sourcereader is now ready to write PCM-samples to file
+
+  FirstAudioSample := true;
+
+  // Setup of the output file
+
+  pBuffer := nil;
+  pAudioSample := nil;
+  AudioDone := false;
+
+  WaveStream := TFileStream.Create(
+    OutputFilename,
+    fmCreate,
+    fmShareDenyWrite);
+  try
+    CheckFail(MFCreateWaveFormatExFromMFMediaType(
+      pAudioTypeIn,
+      pWav,
+      cbFormat,
+      DWord(MFWaveFormatExConvertFlag_Normal)));
+
+    header[0] := FCC('RIFF'); // 4 bytes
+    header[1] := 0; // 4 bytes
+    header[2] := FCC('WAVE'); // 4 bytes
+    // Start of 'fmt ' chunk
+    header[3] := FCC('fmt '); // 4 bytes
+    header[4] := cbFormat; // 4 bytes
+
+    // The WaveFormatEx structure will be placed inbetween RIFF and Data header
+
+    // data
+    dataHeader[0] := FCC('data'); // 4 bytes
+    dataHeader[1] := 0; // 4 bytes
+
+    // Write the RIFF header
+    WaveStream.Write(
+      header,
+      SizeOf(header));
+    // Write the WAVEFORMATEX structure.
+    WaveStream.Write(
+      pWav^,
+      cbFormat);
+    WaveStream.Write(
+      dataHeader,
+      SizeOf(dataHeader));
+    CoTaskMemFree(pWav);
+
+    AudioBytesWritten := 0;
+
+    while not AudioDone do
+    begin
+      // pull a sample out of the audio source reader
+      CheckFail(pSourceReader.ReadSample(
+        AudioStreamIndex, // get a sample from audio stream
+        0, // no source reader controller flags
+        @ActualStreamIndex, // get actual index of the stream
+        @flags, // get flags for this sample
+        @AudioTimestamp, // get the timestamp for this sample
+        @pAudioSample)); // get the actual sample
+
+      if ((flags and MF_SOURCE_READERF_STREAMTICK) <> 0) then
+      begin
+        continue;
+      end;
+      // To be on the safe side we check all flags for which
+      // further reading would not make any sense
+      // and set fAudioDone to true
+      if ((flags and MF_SOURCE_READERF_ENDOFSTREAM) <> 0) or
+        ((flags and MF_SOURCE_READERF_ERROR) <> 0) or
+        ((flags and MF_SOURCE_READERF_NEWSTREAM) <> 0) or
+        ((flags and MF_SOURCE_READERF_NATIVEMEDIATYPECHANGED) <> 0) or
+        ((flags and MF_SOURCE_READERF_ALLEFFECTSREMOVED) <> 0) then
+      begin
+        AudioDone := true;
+      end;
+      if (pAudioSample <> nil) and (not AudioDone) then
+      begin
+
+        if FirstAudioSample then
+        begin
+          FirstAudioSample := false;
+          if AudioTimestamp > 0 then
+          begin
+            // pad beginning of data with silence
+            SilenceBufferSize := 4 * trunc(AudioSampleRate * AudioTimestamp /
+              1000 / 10000);
+            if SilenceBufferSize > 1 then // otherwise pointless
+            begin
+              SetLength(
+                SilenceBuffer,
+                SilenceBufferSize);
+              FillChar(
+                SilenceBuffer[0],
+                SilenceBufferSize,
+                0);
+              SilenceBuffer[1] := $06;
+              WaveStream.Write(
+                SilenceBuffer[0],
+                SilenceBufferSize);
+              inc(
+                AudioBytesWritten,
+                SilenceBufferSize);
+              SetLength(SilenceBuffer,0);
+            end;
+          end;
+        end;
+
+        CheckFail(pAudioSample.ConvertToContiguousBuffer(@pBuffer));
+
+        CheckFail(pBuffer.Lock(
+          pData,
+          nil,
+          @AudioBufferSize));
+
+        if WaveStream.Write(pData^, AudioBufferSize) <>
+          integer(AudioBufferSize) then
+          exit;
+        inc(
+          AudioBytesWritten,
+          AudioBufferSize);
+        SafeRelease(pBuffer);
+      end;
+      SafeRelease(pAudioSample);
+    end; // while not AudioDone
+
+    // Fill in the missing parts of the header
+    WaveStream.Seek(
+      SizeOf(header) + cbFormat + SizeOf(dataHeader) - SizeOf(DWord),
+      soFromBeginning);
+    WaveStream.Write(
+      AudioBytesWritten,
+      SizeOf(AudioBytesWritten));
+    WaveStream.Seek(
+      SizeOf(FourCC),
+      soFromBeginning);
+    FileSize := SizeOf(header) + cbFormat + SizeOf(dataHeader) +
+      AudioBytesWritten - 8;
+    WaveStream.Write(
+      FileSize,
+      SizeOf(FileSize));
+
+    Result := true;
+  finally
+    WaveStream.Free;
+    if succeeded(hrStartUp) then
+      MfShutDown;
+    if succeeded(hrCoInit) then
+      CoUninitialize;
+  end;
+
+end;
 
 function SetTimerResolution(
   TargetResolution:  UInt32;
@@ -166,7 +413,7 @@ var
   tc: TimeCaps;
 begin
   Result := E_Fail;
-  if TimeGetDevCaps(@tc, SizeOF(TimeCaps)) <> TIMERR_NOERROR then
+  if TimeGetDevCaps(@tc, SizeOf(TimeCaps)) <> TIMERR_NOERROR then
     exit;
   SetResolution := min(
     max(tc.wPeriodMin, TargetResolution),
@@ -187,7 +434,7 @@ var
   mfArea: MFVideoArea;
   attribs: IMFAttributes;
   hrCoInit, hrStartUp: HResult;
-  pb: PByte;
+  pb: pByte;
   FourCC: DWord;
   FourCCString: string[4];
   I: integer;
@@ -202,7 +449,8 @@ const
     if not succeeded(hr) then
     begin
       err := '$' + IntToHex(hr, 8);
-      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x', [Count, ProcName, hr]);
+      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x',
+        [Count, ProcName, hr]);
     end;
   end;
 
@@ -245,7 +493,7 @@ begin
     else
     begin
       FourCC := GUID.D1;
-      pb := PByte(@FourCC);
+      pb := pByte(@FourCC);
       SetLength(
         FourCCString,
         4);
@@ -260,13 +508,13 @@ begin
     CheckFail(pReader.GetPresentationAttribute(MF_SOURCE_READER_MEDIASOURCE,
       MF_PD_DURATION, _var));
     CheckFail(PropVariantToInt64(_var, Result.Duration));
-    Result.DurationString:=HnsTimeToStr(Result.Duration,False) + '[h:m:s]';
+    Result.DurationString := HnsTimeToStr(Result.Duration, false) + '[h:m:s]';
     // Result.Duration := _var.hVal.QuadPart; Makes no difference.
     PropVariantClear(_var);
 
     ZeroMemory(
       @mfArea,
-      SizeOF(mfArea));
+      SizeOf(mfArea));
 
     // for some codecs, like HEVC, MF_MT_FRAME_SIZE does not
     // return the correct video size for display.
@@ -275,13 +523,13 @@ begin
     hr := pMediaTypeIn.GetBlob(
       MF_MT_PAN_SCAN_APERTURE,
       @mfArea,
-      SizeOF(MFVideoArea),
+      SizeOf(MFVideoArea),
       nil);
     if Failed(hr) then
       hr := pMediaTypeIn.GetBlob(
         MF_MT_MINIMUM_DISPLAY_APERTURE,
         @mfArea,
-        SizeOF(MFVideoArea),
+        SizeOf(MFVideoArea),
         nil);
     if succeeded(hr) then
     begin
@@ -303,17 +551,22 @@ begin
       CheckFail(MFGetAttributeRatio(pMediaTypeIn, MF_MT_PIXEL_ASPECT_RATIO,
         Num, Den));
     Result.PixelAspect := Num / Den;
-    if Result.VideoHeight>0 then
-    Result.VideoAspect := Result.VideoWidth/Result.VideoHeight*Result.PixelAspect;
-    if abs(Result.VideoAspect-16/9)<1E-4 then
-    Result.VideoAspectString:='16:9'
+    if Result.VideoHeight > 0 then
+      Result.VideoAspect := Result.VideoWidth / Result.VideoHeight *
+        Result.PixelAspect;
+    if abs(Result.VideoAspect - 16 / 9) < 1E-4 then
+      Result.VideoAspectString := '16:9'
     else
-    if abs(Result.VideoAspect-4/3)<1E-4 then
-    Result.VideoAspectString:='4:3'
+      if abs(Result.VideoAspect - 4 / 3) < 1E-4 then
+      Result.VideoAspectString := '4:3'
     else
-    Result.VideoAspectString:=FloatToStrF(Result.VideoAspect,ffFixed,6,4);
+      Result.VideoAspectString := FloatToStrF(
+        Result.VideoAspect,
+        ffFixed,
+        6,
+        4);
 
-    hr := pMediaTypeIn.GetUINT32(
+    hr := pMediaTypeIn.GetUInt32(
       MF_MT_INTERLACE_MODE,
       Result.InterlaceMode);
     if Failed(hr) then
@@ -353,12 +606,12 @@ begin
       if GUID = MFMediaType_Audio then
         inc(Result.AudioStreamCount);
       inc(AudioStreamNo);
-    until False;
+    until false;
   finally
     if succeeded(hrStartUp) then
-      MFShutdown();
+      MfShutDown();
     if succeeded(hrCoInit) then
-      COUninitialize;
+      CoUninitialize;
   end;
 end;
 
@@ -373,7 +626,7 @@ var
   pSample: IMFSample;
   Timestamp, Duration, SeekTime: int64;
 begin
-  Result := False;
+  Result := false;
   if FrameNo <= 0 then
     exit;
   VT := TVideoTransformer.Create(
@@ -381,7 +634,7 @@ begin
     bmHeight,
     0);
   try
-    SeekTime := Trunc((FrameNo - 1) / VT.VideoInfo.FrameRate * 1000 * 10000);
+    SeekTime := trunc((FrameNo - 1) / VT.VideoInfo.FrameRate * 1000 * 10000);
     If not VT.Seek(SeekTime) then
       exit;
     Repeat
@@ -418,7 +671,8 @@ const
     inc(Count);
     if not succeeded(hr) then
     begin
-      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x', [Count, ProcName, hr]);
+      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x',
+        [Count, ProcName, hr]);
     end;
   end;
 
@@ -431,7 +685,7 @@ begin
 
     fVideoInfo := GetVideoInfo(fInputFile);
     if NewFrameRate = 0 then
-        fNewFrameRate := fVideoInfo.FrameRate
+      fNewFrameRate := fVideoInfo.FrameRate
     else
       fNewFrameRate := NewFrameRate;
     if NewHeight = 0 then
@@ -470,7 +724,8 @@ begin
     CheckFail(MFCreateMediaType(pPartialType));
     CheckFail(pPartialType.SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video));
     CheckFail(pPartialType.SetGUID(MF_MT_SUBTYPE, MFVideoFormat_RGB32));
-    CheckFail(pPartialType.SetUINT32(MF_MT_INTERLACE_MODE, 2)); // 2=progressive.
+    CheckFail(pPartialType.SetUINT32(MF_MT_INTERLACE_MODE, 2));
+    // 2=progressive.
     CheckFail(MFSetAttributeRatio(pPartialType, MF_MT_FRAME_RATE,
       round(fNewFrameRate * 1000000), 1000000));
 
@@ -486,11 +741,11 @@ begin
     CheckFail(pReader.GetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM,
       pMediaTypeOut));
     // Prevent memory leak
-    CheckFail(pReader.SetStreamSelection(MF_SOURCE_READER_ALL_STREAMS, False));
+    CheckFail(pReader.SetStreamSelection(MF_SOURCE_READER_ALL_STREAMS, false));
     // Ensure the stream is selected.
     CheckFail(pReader.SetStreamSelection
       (MF_SOURCE_READER_FIRST_VIDEO_STREAM, true));
-    fEndOfFile := False;
+    fEndOfFile := false;
   except
     raise eVideoFormatException.Create
       ('Video format of input file not supported.');
@@ -512,9 +767,9 @@ end;
 destructor TVideoTransformer.Destroy;
 begin
   if succeeded(hrStartUp) then
-    MFShutdown();
+    MfShutDown();
   if succeeded(hrCoInit) then
-    COUninitialize;
+    CoUninitialize;
   inherited;
 end;
 
@@ -524,7 +779,7 @@ procedure TVideoTransformer.GetNextValidSample(
 var
   Count: integer;
   pSampleLoc: IMFSample;
-  Flags: DWord;
+  flags: DWord;
   hr: HResult;
 const
   ProcName = 'TVideoTransformer.GetNextValidSample';
@@ -533,7 +788,8 @@ const
     inc(Count);
     if not succeeded(hr) then
     begin
-      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x', [Count, ProcName, hr]);
+      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x',
+        [Count, ProcName, hr]);
     end;
   end;
 
@@ -544,17 +800,17 @@ begin
     exit;
   Repeat
     CheckFail(pReader.ReadSample(MF_SOURCE_READER_FIRST_VIDEO_STREAM, 0, nil,
-      @Flags, nil, @pSampleLoc));
-    if ((Flags and MF_SOURCE_READERF_STREAMTICK) <> 0) then
+      @flags, nil, @pSampleLoc));
+    if ((flags and MF_SOURCE_READERF_STREAMTICK) <> 0) then
       continue;
     // To be on the safe side we check all flags for which
     // further reading would not make any sense
     // and set EndOfFile to true
-    if ((Flags and MF_SOURCE_READERF_ENDOFSTREAM) <> 0) or
-      ((Flags and MF_SOURCE_READERF_ERROR) <> 0) or
-      ((Flags and MF_SOURCE_READERF_NEWSTREAM) <> 0) or
-      ((Flags and MF_SOURCE_READERF_NATIVEMEDIATYPECHANGED) <> 0) or
-      ((Flags and MF_SOURCE_READERF_ALLEFFECTSREMOVED) <> 0)
+    if ((flags and MF_SOURCE_READERF_ENDOFSTREAM) <> 0) or
+      ((flags and MF_SOURCE_READERF_ERROR) <> 0) or
+      ((flags and MF_SOURCE_READERF_NEWSTREAM) <> 0) or
+      ((flags and MF_SOURCE_READERF_NATIVEMEDIATYPECHANGED) <> 0) or
+      ((flags and MF_SOURCE_READERF_ALLEFFECTSREMOVED) <> 0)
     then
 
     begin
@@ -585,7 +841,7 @@ begin
       pSampleLoc := nil;
     end;
     // Can it happen that we get an infinite loop here?
-  Until False;
+  Until false;
 end;
 
 function TVideoTransformer.NextValidSampleToBitmap(
@@ -597,7 +853,7 @@ var
   pSample: IMFSample;
   pBuffer: IMFMediaBuffer;
   Stride: integer;
-  pRow, pData: PByte;
+  pRow, pData: pByte;
   ImageSize: DWord;
 const
   ProcName = 'TVideoTransformer.NextValidSampleToBitmap';
@@ -606,12 +862,13 @@ const
     inc(Count);
     if not succeeded(hr) then
     begin
-     raise Exception.CreateFmt('Fail in call no. %d of %s with result %x', [Count, ProcName, hr]);
+      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x',
+        [Count, ProcName, hr]);
     end;
   end;
 
 begin
-  Result := False;
+  Result := false;
   if fEndOfFile then
     exit;
   Count := 0;
@@ -682,7 +939,8 @@ const
     if not succeeded(hr) then
     begin
       err := '$' + IntToHex(hr, 8);
-      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x', [Count, ProcName, hr]);
+      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x',
+        [Count, ProcName, hr]);
     end;
   end;
 
@@ -694,7 +952,7 @@ begin
     CheckFail(InitPropVariantFromInt64(VideoTime, &var_));
     Result := succeeded(pReader.SetCurrentPosition(GUID_NULL, var_));
     PropVariantClear(&var_);
-    fEndOfFile := False;
+    fEndOfFile := false;
   end;
 end;
 

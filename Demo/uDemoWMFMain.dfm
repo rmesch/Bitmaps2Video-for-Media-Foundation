@@ -636,6 +636,14 @@ object DemoWMFMain: TDemoWMFMain
               Caption = 'Adjust presentation time to audio time'
               TabOrder = 10
             end
+            object ConvertToWav: TCheckBox
+              Left = 394
+              Top = 145
+              Width = 244
+              Height = 17
+              Caption = 'Convert audio to .wav before encoding'
+              TabOrder = 11
+            end
           end
           object Stats: TMemo
             Left = 394
@@ -649,7 +657,7 @@ object DemoWMFMain: TDemoWMFMain
             TabOrder = 1
           end
           object WriteSlideshow: TButton
-            Left = 24
+            Left = 23
             Top = 205
             Width = 269
             Height = 38
@@ -664,15 +672,6 @@ object DemoWMFMain: TDemoWMFMain
             TabOrder = 2
             WordWrap = True
             OnClick = WriteSlideshowClick
-          end
-          object DroppedFramesCheck: TCheckBox
-            Left = 394
-            Top = 150
-            Width = 295
-            Height = 17
-            Anchors = [akLeft, akBottom]
-            Caption = 'Investigate output for dropped frames (slow)'
-            TabOrder = 3
           end
         end
         object Panel1: TPanel
@@ -851,11 +850,11 @@ object DemoWMFMain: TDemoWMFMain
           Caption = 'VideoClipFile'
         end
         object AudioFileName: TLabel
-          Left = 152
+          Left = 151
           Top = 156
-          Width = 82
+          Width = 60
           Height = 15
-          Caption = 'AudioFileName'
+          Caption = 'Optional'
         end
         object Label14: TLabel
           AlignWithMargins = True
@@ -998,6 +997,14 @@ object DemoWMFMain: TDemoWMFMain
           TabOrder = 7
           OnClick = AbortClick
         end
+        object ConvertToWav1: TCheckBox
+          Left = 438
+          Top = 192
+          Width = 253
+          Height = 17
+          Caption = 'Convert audio to .wav before encoding'
+          TabOrder = 8
+        end
       end
       object TabSheet4: TTabSheet
         Caption = 'Use TBitmapEncoderWMF as a transcoder'
@@ -1096,6 +1103,14 @@ object DemoWMFMain: TDemoWMFMain
           Height = 17
           Caption = 'StretchToAspect'
           TabOrder = 6
+        end
+        object ConvertToWav2: TCheckBox
+          Left = 463
+          Top = 76
+          Width = 248
+          Height = 17
+          Caption = 'Convert audio to .wav before encoding'
+          TabOrder = 7
         end
       end
       object TabSheet5: TTabSheet
@@ -1388,7 +1403,7 @@ object DemoWMFMain: TDemoWMFMain
         FileMask = '*.txt'
       end>
     Options = []
-    Left = 794
-    Top = 121
+    Left = 798
+    Top = 157
   end
 end

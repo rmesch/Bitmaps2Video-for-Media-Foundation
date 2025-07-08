@@ -185,7 +185,6 @@ type
     AdvancedOptions: TButton;
     DisableGOPSize: TCheckBox;
     WriteSlideshow: TButton;
-    DroppedFramesCheck: TCheckBox;
     Splitter2: TSplitter;
     Panel1: TPanel;
     Splitter3: TSplitter;
@@ -214,6 +213,9 @@ type
     Button7: TButton;
     Label21: TLabel;
     Edit1: TEdit;
+    ConvertToWav: TCheckBox;
+    ConvertToWav1: TCheckBox;
+    ConvertToWav2: TCheckBox;
 
     // Important procedure showing the use of TBitmapEncoderWMF
     procedure WriteAnimationClick(Sender: TObject);
@@ -694,8 +696,8 @@ var
   i: integer;
   TimeImage, TimeTransition: integer;
   SlideshowTime: int64;
-  VT: TVideoTransformer;
   VideoInfo: TVideoInfo;
+  WaveFileName: string;
 begin
   if fWriting then
   begin
@@ -703,6 +705,7 @@ begin
     exit;
   end;
   af := '';
+  WaveFileName := '';
   if AudioDialog then
   begin
     af := AudioFile;
@@ -733,13 +736,19 @@ begin
     try
       Status.Caption := 'Working';
       StopWatch.Start;
-      // bms.PixelFormat := pf32bit;
-      // bms.SetSize(VideoWidth, VideoHeight);
-      // BitBlt(bms.Canvas.Handle, 0, 0, VideoWidth, VideoHeight, 0, 0, 0,
-      // BLACKNESS);
+
       try
         // Set advanced options
         bme.EncoderAdvancedOptions := Self.EncoderAdvancedOptions;
+        if (af <> '') and ConvertToWav.Checked then
+        begin
+          WaveFileName := ExtractFilePath(Application.ExeName) +
+            'Convert.wav';
+          SaveAudioStreamAsWav(
+            af,
+            WaveFileName);
+          af := WaveFileName;
+        end;
         bme.Initialize(
           OutputFileName,
           VideoWidth,
@@ -773,7 +782,8 @@ begin
       if AdjustToAudio.Checked then
       begin
         TimeImage :=
-          round((bme.AudioFileDuration - sl.Count * (TimeTransition - 0.03)) /
+          round((bme.AudioFileDuration + AudioStart - sl.Count *
+          (TimeTransition - 0.03)) /
           sl.Count);
         if MessageDlg('Calculated image time: ' + TimeImage.ToString + ' ms',
           mtConfirmation, [mbYes, mbNo], 0) = mrNo then
@@ -843,19 +853,7 @@ begin
           bme.AudioFileDuration.ToString + ' ms');
         Stats.Lines.Add('File size: ' + (round(100 * GetFileSize(OutputFileName) /
           1024 / 1024) / 100).ToString + ' MB');
-        if DroppedFramesCheck.Checked then
-        begin
-          Stats.Lines.Add('Video frames sent: ' + bme.FrameCount.ToString);
-          VT := TVideoTransformer.Create(
-            OutputFileName,
-            0,
-            0);
-          try
-            Stats.Lines.Add('Video frames encoded: ' + VT.SampleCount.ToString);
-          finally
-            VT.Free;
-          end;
-        end;
+
         Stats.SelStart := 0;
         Stats.SelLength := 0;
         Stats.Perform(
@@ -885,6 +883,7 @@ var
   af: string;
   StopWatch: TStopWatch;
   fps: double;
+  WaveFileName: string;
 begin
   if fWriting then
   begin
@@ -893,20 +892,34 @@ begin
   end;
   fWriting := true;
   fUserAbort := false;
+
   try
-    if not FileExists(AudioFileName.Caption) then
-      af := ''
-    else
-      af := AudioFileName.Caption;
     proceed := FileExists(StartImageFile.Caption) and
       FileExists(EndImageFile.Caption) and FileExists(VideoClipFile.Caption);
     proceed := proceed and (VideoClipFile.Caption <> OutputFileName);
     if not proceed then
     begin
       ShowMessage
-        ('Pick valid files for the images and the video clip first. The output filename cannot be identical to the video clip name.');
+        ('Pick valid files for the images and the video clip first.');
       exit;
     end;
+
+    Status.Caption := 'Working';
+    if not FileExists(AudioFileName.Caption) then
+      af := ''
+    else
+    begin
+      af := AudioFileName.Caption;
+      if ConvertToWav1.Checked then
+      begin
+        WaveFileName := ExtractFilePath(Application.ExeName) + 'Convert.wav';
+        SaveAudioStreamAsWav(
+          af,
+          WaveFileName);
+        af := WaveFileName;
+      end;
+    end;
+
     StopWatch := TStopWatch.Create;
     bme := TBitmapEncoderWMF.Create;
     try
@@ -1086,6 +1099,7 @@ begin
         EncodePriority,
         CropToAspect.Checked,
         StretchToAspect.Checked,
+        ConvertToWav2.Checked,
         procedure(Sender: TObject; FrameCount: Cardinal; VideoTime: int64;
           var DoAbort: boolean)
         begin
@@ -1199,7 +1213,7 @@ var
   Success: boolean;
   ffProbePath: string;
 begin
-  if fWriting or (not System.SysUtils.FileExists(OutputFilename)) then
+  if fWriting or (not System.SysUtils.FileExists(OutputFileName)) then
   begin
     ShowMessage('Output file has not been generated');
     exit;
@@ -1260,7 +1274,7 @@ var
   Success: boolean;
   ffProbePath: string;
 begin
-  if not FODVideo.Execute then
+  if not FODAudio.Execute then
     exit;
   ffProbePath := ExtractFilePath(Application.ExeName);
   TDirectory.SetCurrentDirectory(ffProbePath);
@@ -1366,12 +1380,12 @@ end;
 procedure TDemoWMFMain.Edit1Click(Sender: TObject);
 begin
   ShellExecute(
-      Handle,
-      'open',
-      PWideChar(edit1.text),
-      nil,
-      nil,
-      SW_SHOWNORMAL);
+    Handle,
+    'open',
+    PWideChar(Edit1.text),
+    nil,
+    nil,
+    SW_SHOWNORMAL);
 end;
 
 procedure TDemoWMFMain.FileExtChange(Sender: TObject);
@@ -1494,7 +1508,7 @@ end;
 
 function TDemoWMFMain.GetAudioBitRate: integer;
 begin
-  Result := StrToInt(Bitrate.Text);
+  Result := StrToInt(Bitrate.text);
 end;
 
 function TDemoWMFMain.GetAudioDialog: boolean;
@@ -1514,7 +1528,7 @@ end;
 
 function TDemoWMFMain.GetAudioSampleRate: integer;
 begin
-  Result := StrToInt(SampleRate.Text);
+  Result := StrToInt(SampleRate.text);
 end;
 
 function TDemoWMFMain.GetAudioStart: int64;
@@ -1533,7 +1547,8 @@ begin
 end;
 
 const
-  FrameRateArray: array [0 .. 8] of double = (25, 29.97, 30, 31.25,45, 46.875, 60, 90, 120);
+  FrameRateArray: array [0 .. 8] of double = (25, 29.97, 30, 31.25, 45, 46.875,
+    60, 90, 120);
 
 function TDemoWMFMain.GetFrameRate: double;
 begin
@@ -1548,7 +1563,7 @@ end;
 function TDemoWMFMain.GetOutputFileName: string;
 begin
   Result := fOutputFile + '_' + CodecShortNames[fCodecList[Codecs.ItemIndex]] +
-    FileExt.Text;
+    FileExt.text;
 end;
 
 function TDemoWMFMain.GetQuality: integer;
@@ -1558,7 +1573,7 @@ end;
 
 function TDemoWMFMain.GetVideoHeight: integer;
 begin
-  Result := StrToInt(Heights.Text);
+  Result := StrToInt(Heights.text);
 end;
 
 function TDemoWMFMain.GetVideoWidth: integer;
