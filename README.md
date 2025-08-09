@@ -2,6 +2,8 @@
 
 # Bitmaps2Video for Media Foundation
 
+<B> This version requires the newest version of Mfpack! </B>
+
  A VCL-based Delphi-class to encode a series of bitmaps and video-clips together with an audio file to video using the Windows Mediafoundation-API.
 
 The encoding class TBitmapEncoderWMF can be found in Source\uBitmaps2VideoWMF.pas. 
