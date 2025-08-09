@@ -84,32 +84,9 @@ begin
 end;
 
 function MaximizeToRect(const Source:TBitmap; const Target: TBitmap; aRect: TRect; var DisplayRect: TRect): boolean;
-var
-  wRect, hRect: integer;
-  asp, aspRect: double;
-  dLeft, dTop: integer;
 begin
-  Result := false;
-  wRect := aRect.Right-aRect.Left;
-  hRect := aRect.Bottom-aRect.Top;
-  if (Source.Width=0) or (Source.Height=0) or (wRect=0) or (hRect=0) then
-  exit;
-  asp:=Source.Width/Source.Height;
-  aspRect:=wRect/hRect;
-  if asp>aspRect then //scale to wRect
-  begin
-    Target.Width:=wRect;
-    Target.Height:=round(wRect/asp);
-  end
-  else
-  begin
-    Target.Height:=hRect;
-    Target.Width:=round(hRect*asp);
-  end;
-  uScaleWMF.Resample(Target.Width,Target.Height,Source,Target,cfBicubic,0,true,amIgnore);
-  dLeft:=(wRect-Target.Width) div 2;
-  dTop:=(hRect-Target.Height) div 2;
-  DisplayRect:=Rect(dLeft,dTop,dleft+Target.Width,dTop+Target.Height);
+  uScaleWMF.MaximizeToRect(aRect,DisplayRect,Source,Target,cfBicubic,0,true);
+  Result:=true;
 end;
 
 

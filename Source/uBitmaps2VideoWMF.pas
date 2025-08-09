@@ -86,6 +86,8 @@ type
   TCodecID = (ciH264, ciH265);
   TCodecIDArray = array of TCodecID;
 
+  TAudioCodecID = (AAC, FLAC);
+
 const
   CodecNames: array [TCodecID] of string = ('H264 (Mpeg-4, AVC)',
     'H265 (HEVC)');
@@ -100,15 +102,7 @@ type
   // This rectangle should be a sub-rectangle of [0,1]x[0,1].
   // If multipied by the width/height of a target rectangle, it defines
   // an aspect-preserving sub-rectangle of the target.
-  TZoom = record
-    xCenter, yCenter: single;
-    Radius: single;
-    function ToRectF(Width, Height: integer)
-      : TRectF; inline;
-  end;
-
-const
-  _FullZoom: TZoom = (xCenter: 0.5; yCenter: 0.5; Radius: 0.5);
+  TZoom = uScaleCommonWMF.TZoom;
 
 type
   eAudioFormatException = class(Exception);
@@ -137,7 +131,8 @@ const
     DisableQualityBasedEncoding: false;
     ForceEncoderLevel: false;
     DisableGOPSize: false;
-    ResamplingThreadsLimit: 4
+    //Get as many processors as possible to do the resampling
+    ResamplingThreadsLimit: 16
     );
 
 type
@@ -150,13 +145,11 @@ type
     fAudioBitrate, fAudioSampleRate: DWord;
     fSampleDuration: DWord;
     fExactSampleDuration: double;
-    fBrake: DWord;
     pSinkWriter: IMFSinkWriter;
     pSourceReader: IMFSourceReader;
     pMediaTypeOut: IMFMediaType;
     pMediaTypeIn: IMFMediaType;
     pAudioTypeIn, pAudioTypeOut, pAudioTypeNative: IMFMediaType;
-    pSampleBuffer, pSampleBufferSilence: IMFMediaBuffer;
     fBufferSizeVideo, fBufferSizeAudio: DWord;
     fSinkStreamIndexVideo, fSinkStreamIndexAudio: DWord;
     fAudioDuration, fAudioTime, fAudioFrameDuration, fSilenceTime: int64;
@@ -169,7 +162,6 @@ type
     fFirstAudioFrame: boolean;
     fInitialized, fWriteAudio: boolean;
     fAudioStart: int64;
-    fGPUPriority: word;
     fBottomUp: boolean;
 
     fVideoTime: int64;
@@ -180,20 +172,22 @@ type
     fAudioBytesPerSecond: DWord;
     fAudioBlockAlign: DWord;
     fAudioStreamIndex: DWord;
-    fAudioByteStream: TFileStream;
 
     fBmRGBA: TBitmap;
     fOnProgress: TBitmapEncoderProgressEvent;
     fEncoderAdvancedOptions: TEncoderAdvancedOptions;
+    fLastEncodingStats: TVideoStats;
+
+    // Move the RGBA-pixels into an MF sample buffer
+    procedure bmRGBAToSampleBuffer(
+      const bm:       TBitmap;
+      aSampleBuffer: IMFMediaBuffer);
 
     // Resize/crop bm to input format for the encoder.
     procedure BitmapToRGBA(
       const bmSource, bmRGBA: TBitmap;
       crop:                   boolean;
       stretch:                boolean = false);
-
-    // Move the RGBA-pixels into an MF sample buffer
-    procedure bmRGBAToSampleBuffer(const bm: TBitmap);
 
     // Encode one frame to video stream and the corresponding audio sample(s) to audio stream
     procedure WriteOneFrame(
@@ -209,18 +203,19 @@ type
     // Initialize the audio-sourcereader and add an audiostream with the desired encoding to the sinkwriter
     procedure InitAudio(
       const AudioFileName:                        string;
+      AudioCodec: TAudioCodecId;
       AudioSampleRate, AudioBitrate, StreamIndex: DWord);
 
     function WriteSilence(
-  TimeStamp: int64;
-  Duration:  int64)
-  : HResult;
+      TimeStamp: int64;
+      Duration:  int64)
+      : HResult;
 
-  function GetAudioDuration: int64;
+    function GetAudioDuration: int64;
+    function GetResamplingThreadPool: PResamplingThreadPool;
 
+    function GetEncodingStats: TVideoStats; inline;
 
-    // not working at the moment
-    // function GetEncodingStats: TVideoStats;
   public
     constructor Create;
 
@@ -231,9 +226,9 @@ type
     /// <param name="Quality">Quality of the video encoding on a scale of 1 to 100</param>
     /// <param name="FrameRate">Frame rate in frames per second. Value >= 30 recommended. </param>
     /// <param name="Codec">Video codec enum for encoding. Presently ciH264 or ciH265 </param>
-    /// <param name="EncodePriority">The higher the more the main thread is stalled to allow time slots for encoding. Lower for speed, increase if video stutters. </param>
     /// <param name="Resampler">Enum defining the quality of resizing. cfBox, cfBilinear, cfBicubic or cfLanczos</param>
-    /// <param name="AudioFileName">Optional audio or video file (.wav, .mp3, .aac, .mp4, .wma etc.), audio stream encoded as AAC. Default ''</param>
+    /// <param name="AudioFileName">Optional audio or video file (.wav, .mp3, .aac, .mp4, .wma etc.). Default ''</param>
+    /// <param name="AudioCodec">Audio Codec, AAC or FLAC supported. Default AAC</param>
     /// <param name="AudioBitRate"> in kb/sec (96, 128, 160, 192 accepted). Default 192 </param>
     /// <param name="AudioSampleRate"> 44100 or 48000. Default 48000 </param>
     /// <param name="AudioStart"> Delay of audio start in ms. Default 0 </param>
@@ -243,10 +238,10 @@ type
       Width, Height, Quality: integer;
       FrameRate:              double;
       Codec:                  TCodecID;
-      EncodePriority:         word = 3;
       Resampler:              TFilter = cfBicubic;
       // Audio settings
       const AudioFileName: string = '';
+      AudioCodec:          TAudioCodecID = AAC;
       AudioBitrate:        integer = 192;
       AudioSampleRate:     integer = 48000;
       AudioStart:          int64 = 0);
@@ -327,16 +322,12 @@ type
 
     // If true, timestamp in sec will be displayed on the frames. A rough check for a uniform timing of frames.
     // Timing could be very irregular at the beginning of development with high frame rates and large video sizes.
-    // I had to artificially slow down the generation of some frames to (hopefully) fix it.
-    // See Freeze.
+    // Avoiding global variables for media-buffers fixed all of those problems.
     property TimingDebug: boolean read fTimingDebug write fTimingDebug;
 
     // Event which fires every 30 frames. Use to indicate progress or abort encoding.
     property OnProgress: TBitmapEncoderProgressEvent read fOnProgress
       write fOnProgress;
-
-    // property EncodingStats: TVideoStats
-    // read GetEncodingStats;
 
     // need to be set after Creation and before calling Initialize
     // uses _DefaultAdvancedOptions if not set
@@ -346,6 +337,21 @@ type
     // after having been initialized with an audio-file the duration in ms can be
     // obtained by this property.
     property AudioFileDuration: int64 read GetAudioDuration;
+
+    property Initialized: boolean read fInitialized;
+
+    // CurrentTimeStamp is the start-time for the next video-frame
+    property CurrentTimeStamp: int64 read fWriteStart;
+
+    property VideoWidth: DWord read fVideoWidth;
+    property VideoHeight: DWord read fVideoHeight;
+
+    // Useful for using the threadpool of TBitmapEncoderWMF for other things
+    property pThreadPool: PResamplingThreadPool read GetResamplingThreadPool;
+
+    // Some statistics of the encoding sinkwriter.
+    // Helpful for debugging.
+    property EncodingStats: TVideoStats read GetEncodingStats;
   end;
 
 function GetSupportedCodecs(const FileExt: string)
@@ -358,7 +364,6 @@ procedure TranscodeVideoFile(
   Quality:                             integer;
   NewWidth, NewHeight:                 integer;
   NewFrameRate:                        single;
-  EncodePriority:                      word;
   crop:                                boolean = false;
   stretch:                             boolean = false;
   ConvertToWav:                        boolean = false;
@@ -374,7 +379,6 @@ procedure TranscodeVideoFile(
   Quality:                             integer;
   NewWidth, NewHeight:                 integer;
   NewFrameRate:                        single;
-  EncodePriority:                      word;
   crop:                                boolean = false;
   stretch:                             boolean = false;
   ConvertToWav:                        boolean = false;
@@ -397,7 +401,8 @@ begin
       wavefile := ExtractFilePath(Application.ExeName) + 'Convert.wav';
       SaveAudioStreamAsWav(
         audiofile,
-        wavefile);
+        wavefile,
+        0);
       audiofile := wavefile;
     end;
   end;
@@ -410,9 +415,9 @@ begin
       Quality,
       NewFrameRate,
       Codec,
-      EncodePriority,
       cfBilinear,
       audiofile,
+      AAC,
       192,
       48000,
       0);
@@ -467,6 +472,18 @@ begin
       result := MFVideoFormat_HEVC;
     // ciWMV:
     // result := MFVideoFormat_WMV3;
+  end;
+end;
+
+// translation of our codec-enumeration to MF-constants
+function GetAudioFormat(Id: TAudioCodecId)
+  : TGUID;
+begin
+  case Id of
+    AAC:
+      result := MFAudioFormat_AAC;
+    FLAC:
+      result := MFAudioFormat_FLAC;
   end;
 end;
 
@@ -581,7 +598,6 @@ begin
     aThreadPool.ResamplingThreads[Index].RunAnonProc
       (GetAlphaBlendProc(CF, pSourceStart, pTargetStart, pTweenStart,
       alpha, Index));
-  Sleep(0);
   for Index := 0 to aThreadPool.ThreadCount - 1 do
     aThreadPool.ResamplingThreads[Index].Done.WaitFor(INFINITE);
 end;
@@ -648,11 +664,11 @@ const
 
 constructor TBitmapEncoderWMF.Create;
 begin
-  // leave enough processors for the encoding threads
+  // leave at least 2 processors for the encoding threads
   fEncoderAdvancedOptions := _DefaultAdvancedOptions;
   fThreadPool.Initialize(
     min(fEncoderAdvancedOptions.ResamplingThreadsLimit,
-    TThread.ProcessorCount div 2),
+    TThread.ProcessorCount - 2),
     tpNormal);
   fBmRGBA := TBitmap.Create;
 end;
@@ -663,9 +679,9 @@ procedure TBitmapEncoderWMF.Initialize(
   Width, Height, Quality: integer;
   FrameRate:              double;
   Codec:                  TCodecID;
-  EncodePriority:         word = 3;
   Resampler:              TFilter = cfBicubic;
   const AudioFileName:    string = '';
+  AudioCodec:             TAudioCodecID = AAC;
   AudioBitrate:           integer = 192;
   AudioSampleRate:        integer = 48000;
   AudioStart:             int64 = 0);
@@ -697,7 +713,6 @@ const
 
 begin
   Count := 0;
-  fAudioByteStream := nil;
   if fInitialized then
     raise Exception.Create
       ('The bitmap-encoder must be finalized before re-initializing');
@@ -708,7 +723,7 @@ begin
     fThreadPool.Finalize;
     fThreadPool.Initialize(
       min(fEncoderAdvancedOptions.ResamplingThreadsLimit,
-      TThread.ProcessorCount div 2),
+      TThread.ProcessorCount - 2),
       tpNormal);
   end;
   fFileName := Filename;
@@ -719,10 +734,6 @@ begin
 
   fVideoWidth := Width;
   fVideoHeight := Height;
-  fGPUPriority := EncodePriority;
-  fBrake := max(
-    Trunc(2400 / fVideoHeight),
-    1);
   fQuality := Quality;
   fFrameRate := FrameRate;
   fFilter := Resampler;
@@ -766,18 +777,8 @@ begin
   // UInt32(true)));
 
   // By default wmf throttles the main thread to make sure the encoding
-  // threads get enough time to do their work. If the GPU receives too
-  // much encoding work this leads to timing errors and dropped frames.
-  // But the default throttling is not enough for our purpose.
-  // Choosing true in the next statement would disable the default throttling,
-  // requiring us to take over control over the speed of incoming frames.
-  // I have not found a way to do this reliably, so the default is to keep throttling on.
-  // To further increase timing accuracy we introduce the parameter EncodePriority. The higher,
-  // the more time is set apart for the encoding threads to do their work.
-  // For my NVidia 3060 I use EncodePriority = 2 or 3 with good results.
-  // We have also limited the number of encoding threads to the number of processors
-  // not used by our resizing threads, again an improvement.
-
+  // threads get enough time to do their work if the frames come in too fast.
+  // Disable at your own risk, it can lead to memory corruption.
   CheckFail(attribsContainer.SetUINT32(MF_SINK_WRITER_DISABLE_THROTTLING,
     Uint32(fEncoderAdvancedOptions.DisableThrottling)));
 
@@ -807,7 +808,7 @@ begin
   CheckFail(MFSetAttributeSize(pMediaTypeOut, MF_MT_FRAME_SIZE, fVideoWidth,
     fVideoHeight));
   CheckFail(MFSetAttributeRatio(pMediaTypeOut, MF_MT_FRAME_RATE,
-    Trunc(fFrameRate * 1000000), 1000000));
+    Trunc(fFrameRate * 10000 * 10), 10000 * 10));
   CheckFail(MFSetAttributeRatio(pMediaTypeOut, MF_MT_PIXEL_ASPECT_RATIO, 1, 1));
 
   if Codec = ciH264 then
@@ -847,7 +848,7 @@ begin
   CheckFail(MFSetAttributeSize(pMediaTypeIn, MF_MT_FRAME_SIZE, fVideoWidth,
     fVideoHeight));
   CheckFail(MFSetAttributeRatio(pMediaTypeIn, MF_MT_FRAME_RATE,
-    Trunc(fFrameRate * 1000000), 1000000));
+    Trunc(fFrameRate * 10000 * 10), 10000 * 10));
   CheckFail(MFSetAttributeRatio(pMediaTypeIn, MF_MT_PIXEL_ASPECT_RATIO, 1, 1));
   CheckFail(pMediaTypeIn.SetUINT32(MF_MT_ALL_SAMPLES_INDEPENDENT,
     Uint32(true)));
@@ -874,11 +875,12 @@ begin
       (CODECAPI_AVEncCommonRateControlMode, 3));
     CheckFail(attribsMediaType.SetUINT32(CODECAPI_AVEncCommonQuality,
       fQuality));
+    // CheckFail(attribsMediaType.SetUINT32(CODECAPI_AVEncCommonQualityVsSpeed,
+    // fQuality));
   end;
 
   if not fEncoderAdvancedOptions.DisableGOPSize then
   begin
-    // This improves things a lot:
     CheckFail(attribsMediaType.SetUINT32(CODECAPI_AVEncMPVGOPSize,
       round(3 * fFrameRate)));
     CheckFail(attribsMediaType.SetUINT32(CODECAPI_AVEncNumWorkerThreads,
@@ -894,6 +896,7 @@ begin
     try
       InitAudio(
         AudioFileName,
+        AudioCodec,
         AudioSampleRate,
         AudioBitrate,
         MF_SOURCE_READER_FIRST_AUDIO_STREAM);
@@ -915,7 +918,6 @@ begin
     fVideoHeight);
 
   fBufferSizeVideo := stride * fVideoHeight;
-  CheckFail(MFCreateMemoryBuffer(fBufferSizeVideo, pSampleBuffer));
 
   // Tell the sink writer to start accepting data.
   CheckFail(pSinkWriter.BeginWriting());
@@ -927,13 +929,13 @@ procedure TBitmapEncoderWMF.InitAudio(
   const
   AudioFileName:
   string;
+  AudioCodec: TAudioCodecId;
   AudioSampleRate, AudioBitrate, StreamIndex: DWord);
 var
   _var: TPropVariant;
   Count: integer;
   pPartialType: IMFMediaType;
   hr: HResult;
-  pData: pByte;
 const
   ProcName = 'TBitmapEncoderWMF.InitAudio';
   procedure CheckFail(hr: HResult);
@@ -969,7 +971,7 @@ begin
   CheckFail(MFCreateMediaType(pAudioTypeOut));
 
   CheckFail(pAudioTypeOut.SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio));
-  CheckFail(pAudioTypeOut.SetGUID(MF_MT_SUBTYPE, MFAudioFormat_AAC));
+  CheckFail(pAudioTypeOut.SetGUID(MF_MT_SUBTYPE, GetAudioFormat(AudioCodec)));//MFAudioFormat_AAC));
   // set the number of audio bits per sample. This must be 16 according to docs.
   CheckFail(pAudioTypeOut.SetUINT32(MF_MT_AUDIO_BITS_PER_SAMPLE, 16));
   // set the number of audio samples per second. Must be 44100 or 48000
@@ -983,6 +985,7 @@ begin
   // set the block alignment of the samples. Hardwired to 4.
   CheckFail(pAudioTypeOut.SetUINT32(MF_MT_AUDIO_BLOCK_ALIGNMENT, 4));
   // Level 2 profile
+  if AudioCodec=AAC then
   CheckFail(pAudioTypeOut.SetUINT32(MF_MT_AAC_AUDIO_PROFILE_LEVEL_INDICATION,
     Uint32($29)));
 
@@ -1015,8 +1018,8 @@ begin
   CheckFail(pPartialType.SetUINT32(MF_MT_AUDIO_SAMPLES_PER_SECOND,
     fAudioSampleRate));
   CheckFail(pPartialType.SetUINT32(MF_MT_AUDIO_NUM_CHANNELS, 2));
-  // CheckFail(pPartialType.SetUINT32(MF_MT_ALL_SAMPLES_INDEPENDENT,
-  // Uint32(true)));
+  CheckFail(pPartialType.SetUINT32(MF_MT_ALL_SAMPLES_INDEPENDENT,
+  Uint32(true)));
 
   // set the partial media type on the source stream
   // if this is successful, the reader can deliver uncompressed samples
@@ -1040,36 +1043,28 @@ begin
   finally
     PropVariantClear(_var);
   end;
-  fAudioTime := 0;
-  fSilenceTime := 0;
 
-  // Read fields needed to set up audio-buffers
+  // fAudioBlockAlign is not needed at the moment
   CheckFail(pAudioTypeIn.GetUInt32(MF_MT_AUDIO_BLOCK_ALIGNMENT,
     fAudioBlockAlign));
   // Change if more audio types added!
   fAudioBytesPerSecond := fAudioSampleRate * 4; // 1 PCM-sample = 2*16/8 Bytes
 
-  // Create an audio-buffer that holds silence
-  // the buffer should hold audio for the  audio frame time,
+  // To add silence to an audio stream we need to create
+  // a silence buffer when needed.
+  // The buffer should hold audio for the  audio frame time,
   // which is the time for 1024 PCM-samples
   fExactAudioFrameDuration := 1024 / fAudioSampleRate * 1000 * 10000;
   fAudioFrameDuration := Trunc(fExactAudioFrameDuration);
-  fBufferSizeAudio := 4 * 1024; // SilenceBufferSize(fAudioFrameDuration);
-  CheckFail(MFCreateMemoryBuffer(fBufferSizeAudio, pSampleBufferSilence));
-  CheckFail(pSampleBufferSilence.SetCurrentLength(fBufferSizeAudio));
-  CheckFail(pSampleBufferSilence.Lock(pData, nil, nil));
-  FillChar(
-    pData^,
-    fBufferSizeAudio,
-    0);
-  // prevent crack at beginnning of silence
-  PByteArray(pData)[2] := $06;
-  CheckFail(pSampleBufferSilence.Unlock);
-  CheckFail(pSampleBufferSilence.SetCurrentLength(fBufferSizeAudio));
+  fBufferSizeAudio := 4 * 1024;
 
   // when the first audio sample is encoded we
   // add Silence to fill any gap at the beginning of audio
   fFirstAudioFrame := true;
+
+  //Initialize audio-timestamps
+  fAudioTime := 0;
+  fSilenceTime := 0;
 
 end;
 
@@ -1077,17 +1072,14 @@ procedure TBitmapEncoderWMF.Finalize;
 begin
 
   if Assigned(pSinkWriter) then
+  begin
     pSinkWriter.Finalize();
+    fLastEncodingStats := GetEncodingStats;
+  end;
+
   SafeRelease(pSinkWriter);
   SafeRelease(pSourceReader);
-  fAudioByteStream.Free;
-  fAudioByteStream := nil;
-  if Assigned(pSampleBuffer) then
-    pSampleBuffer.SetCurrentLength(0);
-  SafeRelease(pSampleBuffer);
-  if Assigned(pSampleBufferSilence) then
-    pSampleBufferSilence.SetCurrentLength(0);
-  SafeRelease(pSampleBufferSilence);
+
   if succeeded(hrStartUp) then
     MfShutDown();
   if succeeded(hrCoInit) then
@@ -1141,7 +1133,6 @@ begin
           fBmRGBA,
           crop,
           stretch);
-        bmRGBAToSampleBuffer(fBmRGBA);
 
         WriteOneFrame(
           VideoStart + TimeStamp,
@@ -1180,7 +1171,7 @@ begin
     fBmRGBA,
     crop,
     stretch);
-  bmRGBAToSampleBuffer(fBmRGBA);
+
   WriteOneFrame(
     fWriteStart,
     fSampleDuration);
@@ -1209,25 +1200,19 @@ begin
     fBmRGBA,
     crop,
     stretch);
+
   if fTimingDebug then
   begin
     bmBuf := TBitmap.Create;
     try
       while fWriteStart < StartTime + ShowTime * 10000 do
       begin
-        if (fFrameCount mod fBrake) = (fBrake - 1) then
-        begin
-          // Same slowdown as in Freeze
-          HandleMessages(
-            GetCurrentThread(),
-            1);
-          Sleep(fGPUPriority);
-        end;
+
         bmBuf.Assign(fBmRGBA);
-        bmRGBAToSampleBuffer(bmBuf);
         WriteOneFrame(
           fWriteStart,
           fSampleDuration);
+        fBmRGBA.Assign(bmBuf);
       end;
     finally
       bmBuf.Free;
@@ -1235,7 +1220,6 @@ begin
   end
   else
   begin
-    bmRGBAToSampleBuffer(fBmRGBA);
     Freeze(ShowTime);
   end;
 
@@ -1253,10 +1237,11 @@ procedure TBitmapEncoderWMF.BitmapToRGBA(
   boolean = false);
 var
   bmBack, bm: TBitmap;
-  w, h, wSource, hSource: DWord;
-  SourceRect: TRectF;
   bmWidth, bmHeight: DWord;
+  PicRect: TRect;
 begin
+  if not fInitialized then
+    exit;
   if (bmSource.Width = 0) or (bmSource.Height = 0) then
     raise Exception.Create('Bitmap has size 0');
   bmWidth := bmSource.Width;
@@ -1268,7 +1253,6 @@ begin
     if (bmWidth <> fVideoWidth) or (bmHeight <> fVideoHeight) then
     begin
       if stretch then
-      begin
         uScaleWMF.ZoomResampleParallelThreads(
           fVideoWidth,
           fVideoHeight,
@@ -1279,107 +1263,61 @@ begin
           0,
           amIgnore,
           @fThreadPool)
-      end
+      else
+        if crop then
+        uScaleWMF.CropToTarget(
+          fVideoWidth,
+          fVideoHeight,
+          bm,
+          bmRGBA,
+          fFilter,
+          0,
+          true,
+          amIgnore,
+          @fThreadPool)
       else
       begin
-        if bmWidth * fVideoHeight > fVideoWidth * bmHeight then
-        begin
-          if crop then
-          begin
-            h := fVideoHeight;
-            w := fVideoWidth;
-            hSource := bmHeight;
-            wSource := round(hSource * fVideoWidth / fVideoHeight);
-            SourceRect := RectF(
-              (bmWidth - wSource) div 2,
-              0,
-              (bmWidth + wSource) div 2,
-              bm.Height);
-          end
-          else
-          begin
-            w := fVideoWidth;
-            h := round(fVideoWidth * bmHeight / bmWidth);
-            SourceRect := RectF(
-              0,
-              0,
-              bmWidth,
-              bmHeight);
-          end;
-        end
-        else
-        begin
-          if crop then
-          begin
-            w := fVideoWidth;
-            h := fVideoHeight;
-            wSource := bm.Width;
-            hSource := round(wSource * fVideoHeight / fVideoWidth);
-            SourceRect := RectF(
-              0,
-              (bmHeight - hSource) div 2,
-              bmWidth,
-              (bmHeight + hSource) div 2);
-          end
-          else
-          begin
-            h := fVideoHeight;
-            w := round(fVideoHeight * bmWidth / bmHeight);
-            SourceRect := FloatRect(
-              0,
-              0,
-              bmWidth,
-              bmHeight);
-          end;
-        end;
         bmBack := TBitmap.Create;
         try
-          if (w <> bmWidth) or (h <> bmHeight) then
-            uScaleWMF.ZoomResampleParallelThreads(
-              w,
-              h,
-              bm,
-              bmBack,
-              SourceRect,
-              fFilter,
-              0,
-              amIgnore,
-              @fThreadPool)
-          else
-            bmBack.Assign(bm);
-          if (w <> fVideoWidth) or (h <> fVideoHeight) then
-          begin
-            bmRGBA.PixelFormat := pf32bit;
-            bmRGBA.SetSize(
-              fVideoWidth,
-              fVideoHeight);
-            bmRGBA.Canvas.Lock;
-            bmBack.Canvas.Lock;
-            BitBlt(
-              bmRGBA.Canvas.Handle,
-              0,
-              0,
-              fVideoWidth,
-              fVideoHeight,
-              0,
-              0,
-              0,
-              BLACKNESS);
-            BitBlt(
-              bmRGBA.Canvas.Handle,
-              (fVideoWidth - w) div 2,
-              (fVideoHeight - h) div 2,
-              w,
-              h,
-              bmBack.Canvas.Handle,
-              0,
-              0,
-              SRCCopy);
-            bmBack.Canvas.Unlock;
-            bmRGBA.Canvas.Unlock;
-          end
-          else
-            bmRGBA.Assign(bmBack);
+          uScaleWMF.MaximizeToRect(
+            Rect(0, 0, fVideoWidth, fVideoHeight),
+            PicRect,
+            bm,
+            bmBack,
+            fFilter,
+            0,
+            true);
+
+          bmRGBA.PixelFormat := pf32bit;
+          bmRGBA.SetSize(
+            fVideoWidth,
+            fVideoHeight);
+
+          bmRGBA.Canvas.Lock;
+          bmBack.Canvas.Lock;
+          BitBlt(
+            bmRGBA.Canvas.Handle,
+            0,
+            0,
+            fVideoWidth,
+            fVideoHeight,
+            0,
+            0,
+            0,
+            BLACKNESS);
+          BitBlt(
+            bmRGBA.Canvas.Handle,
+            PicRect.left,
+            PicRect.Top,
+            PicRect.Right - PicRect.left,
+            PicRect.Bottom - PicRect.Top,
+            bmBack.Canvas.Handle,
+            0,
+            0,
+            SRCCopy);
+          bmBack.Canvas.Unlock;
+          bmRGBA.Canvas.Unlock;
+
         finally
           bmBack.Free;
         end;
@@ -1395,7 +1333,8 @@ end;
 procedure TBitmapEncoderWMF.bmRGBAToSampleBuffer(
   const
   bm:
-  TBitmap);
+  TBitmap;
+  aSampleBuffer: IMFMediaBuffer);
 var
   hr: HResult;
   pRow: pByte;
@@ -1403,6 +1342,8 @@ var
   pData: pByte;
   time: string;
 begin
+  if not fInitialized then
+    exit;
   if fTimingDebug then
   begin
     time := IntToStr(fWriteStart div 10000000);
@@ -1427,12 +1368,11 @@ begin
     pRow := bm.ScanLine[0];
   end;
   StrideTarget := 4 * fVideoWidth;
-  hr := pSampleBuffer.Lock(
+  hr := aSampleBuffer.Lock(
     pData,
     nil,
     nil);
   if succeeded(hr) then
-  begin
     hr := MFCopyImage(
       pData { Destination buffer. } ,
       StrideTarget { Destination stride. } ,
@@ -1441,13 +1381,12 @@ begin
       StrideTarget { Image width in bytes. } ,
       fVideoHeight { Image height in pixels. } );
 
-    if succeeded(hr) then
-      hr := pSampleBuffer.Unlock();
+  if succeeded(hr) then
+    hr := aSampleBuffer.Unlock();
 
-    if succeeded(hr) then
-      // Set the data length of the buffer.
-      hr := pSampleBuffer.SetCurrentLength(fBufferSizeVideo);
-  end;
+  if succeeded(hr) then
+    // Set the data length of the buffer.
+    hr := aSampleBuffer.SetCurrentLength(fBufferSizeVideo);
   if not succeeded(hr) then
     raise Exception.Create
       ('TBitmapEncoderWMF.bmRGBAToSampleBuffer failed. Err: ' +
@@ -1536,7 +1475,8 @@ begin
         alpha,
         @fThreadPool);
 
-      bmRGBAToSampleBuffer(bmTween);
+      fBmRGBA.Assign(bmTween);
+
       WriteOneFrame(
         fWriteStart,
         fSampleDuration);
@@ -1566,8 +1506,35 @@ function TBitmapEncoderWMF.WriteSilence(
   : HResult;
 var
   pSampleAudio: IMFSample;
+  pSampleBufferSilence: IMFMediaBuffer;
+  pData: pByte;
 begin
+  pSampleAudio := nil;
+  pSampleBufferSilence := nil;
   result := S_OK;
+  if succeeded(result) then
+    result := MFCreateMemoryBuffer(
+      fBufferSizeAudio,
+      pSampleBufferSilence);
+  if succeeded(result) then
+    result := pSampleBufferSilence.SetCurrentLength(fBufferSizeAudio);
+  if succeeded(result) then
+    result := pSampleBufferSilence.Lock(
+      pData,
+      nil,
+      nil);
+  if succeeded(result) then
+    FillChar(
+      pData^,
+      fBufferSizeAudio,
+      0);
+  // prevent crack at beginnning of silence
+  if succeeded(result) then
+    PByteArray(pData)[2] := $06;
+  if succeeded(result) then
+    result := pSampleBufferSilence.Unlock;
+  if succeeded(result) then
+    result := pSampleBufferSilence.SetCurrentLength(fBufferSizeAudio);
   if succeeded(result) then
     result := MFCreateSample(pSampleAudio);
   if succeeded(result) then
@@ -1580,8 +1547,7 @@ begin
     result := pSinkWriter.WriteSample(
       fSinkStreamIndexAudio,
       pSampleAudio);
-  if succeeded(result) then
-    result := pSampleBufferSilence.SetCurrentLength(fBufferSizeAudio);
+  SafeRelease(pSampleBufferSilence);
   SafeRelease(pSampleAudio);
 end;
 
@@ -1595,12 +1561,12 @@ var
   flags: DWord;
   AudioTimestamp, AudioSampleDuration: int64;
   pAudioSample: IMFSample;
-  pBuffer: IMFMediaBuffer;
-  pData: pByte;
+//  pBuffer: IMFMediaBuffer;
+//  pData: pByte;
   SilenceTime: int64;
 begin
   result := S_OK;
-  pBuffer := nil;
+  //pBuffer := nil;
   pAudioSample := nil;
   AudioBufferSize := 0;
   // If audio is present write audio samples up to the Video-timestamp
@@ -1659,20 +1625,23 @@ begin
           end;
         end;
       end;
-      result := pAudioSample.ConvertToContiguousBuffer(@pBuffer);
-      if not succeeded(result) then
-        exit;
+      //Uncomment the following lines to investigate buffer size
+      //while debugging
 
-      result := pBuffer.Lock(
-        pData,
-        nil,
-        @AudioBufferSize);
-      if not succeeded(result) then
-        exit;
-
-      result := pBuffer.Unlock;
-      if not succeeded(result) then
-        exit;
+//      result := pAudioSample.ConvertToContiguousBuffer(@pBuffer);
+//      if not succeeded(result) then
+//        exit;
+//
+//      result := pBuffer.Lock(
+//        pData,
+//        nil,
+//        @AudioBufferSize);
+//      if not succeeded(result) then
+//        exit;
+//
+//      result := pBuffer.Unlock;
+//      if not succeeded(result) then
+//        exit;
 
       result := pAudioSample.GetSampleDuration(@AudioSampleDuration);
       if not succeeded(result) then
@@ -1693,7 +1662,8 @@ begin
         exit;
       // new end audio time written
       fAudioTime := AudioTimestamp + AudioSampleDuration;
-      SafeRelease(pBuffer);
+
+      //SafeRelease(pBuffer);
     end;
     if fAudioTime > fAudioDuration then
       fAudioDone := true;
@@ -1709,11 +1679,12 @@ end;
 procedure TBitmapEncoderWMF.WriteOneFrame(
   TimeStamp, Duration: int64);
 var
-  pSample, pSampleAudio: IMFSample;
+  pSample: IMFSample;
   Count: integer;
   DoAbort: boolean;
   hr: HResult;
   AudioBufferSize: DWord;
+  pSampleBufferLoc: IMFMediaBuffer;
 const
   ProcName = 'TBitmapEncoderWMF.WriteOneFrame';
   // is only used once to speed up code
@@ -1748,23 +1719,13 @@ begin
     // write silence to the audio stream
     // at least up to TimeStamp
     begin
+      // fSilenceTime is initialized to 0 in initAudio
       while fSilenceTime < TimeStamp do
       begin
         if succeeded(hr) then
-          hr := MFCreateSample(pSampleAudio);
-        if succeeded(hr) then
-          hr := pSampleAudio.AddBuffer(pSampleBufferSilence);
-        if succeeded(hr) then
-          hr := pSampleAudio.SetSampleTime(fSilenceTime);
-        if succeeded(hr) then
-          hr := pSampleAudio.SetSampleDuration(fAudioFrameDuration);
-        if succeeded(hr) then
-          hr := pSinkWriter.WriteSample(
-            fSinkStreamIndexAudio,
-            pSampleAudio);
-        if succeeded(hr) then
-          hr := pSampleBufferSilence.SetCurrentLength(fBufferSizeAudio);
-        SafeRelease(pSampleAudio);
+          hr := WriteSilence(
+            fSilenceTime,
+            fAudioFrameDuration);
         fSilenceTime := fSilenceTime + fAudioFrameDuration;
       end;
       CheckFail(hr);
@@ -1779,12 +1740,26 @@ begin
           AudioBufferSize);
   end;
 
-  // Create a media sample and add the buffer to the sample.
+  // Create a media sample and add a buffer to the sample
+  // which holds the current video frame stored in fbmRGBA
+  // The buffer used to be a global variable.
+  // Now we create and fill the buffer for every video frame,
+  // which solves a lot of timing problems.
   if succeeded(hr) then
     hr := MFCreateSample(pSample);
 
   if succeeded(hr) then
-    hr := pSample.AddBuffer(pSampleBuffer);
+  hr := MFCreateMemoryBuffer(
+    fBufferSizeVideo,
+    pSampleBufferLoc);
+
+  if succeeded(hr) then
+    bmRGBAToSampleBuffer(
+      fBmRGBA,
+      pSampleBufferLoc);
+
+  if succeeded(hr) then
+    hr := pSample.AddBuffer(pSampleBufferLoc);
 
   if succeeded(hr) then
     hr := pSample.SetSampleTime(TimeStamp);
@@ -1807,15 +1782,20 @@ begin
   // Throw excepton if failed
   CheckFail(hr);
 
+  SafeRelease(pSampleBufferLoc);
+
   inc(fFrameCount);
   // Timestamp for the next frame
-  // fWriteStart := TimeStamp + Duration;
   // Adjust fWriteStart to "exact" frame-time boundaries. Improves timing.
   fWriteStart := Trunc(fFrameCount * fExactSampleDuration);
   fVideoTime := fWriteStart div 10000;
 
-  if Assigned(fOnProgress) then
-    if fFrameCount mod 30 = 1 then
+  // give the encoder-threads a chance to do their work
+  HandleMessages(GetCurrentThread());
+  Sleep(0);
+
+  if fFrameCount mod 30 = 1 then
+    if Assigned(fOnProgress) then
     begin
       DoAbort := false;
       fOnProgress(
@@ -1826,9 +1806,6 @@ begin
       if DoAbort then
         Finalize;
     end;
-  // give the encoder-threads a chance to do their work
-  HandleMessages(GetCurrentThread());
-  Sleep(fGPUPriority);
 end;
 
 function Interpolate(
@@ -1937,8 +1914,6 @@ begin
         amIgnore,
         @fThreadPool);
 
-      // HandleThreadMessages(GetCurrentThread,1);
-
       alpha := round(255 * t);
       Alphablend(
         RGBATweenSource,
@@ -1946,7 +1921,8 @@ begin
         RGBATween,
         alpha,
         @fThreadPool);
-      bmRGBAToSampleBuffer(RGBATween);
+      fBmRGBA.Assign(RGBATween);
+
       WriteOneFrame(
         fWriteStart,
         fSampleDuration);
@@ -1971,22 +1947,17 @@ begin
   EndTime := StartTime + EffectTime * 10000;
   while fWriteStart < EndTime - fSampleDuration do
   begin
-    if (fFrameCount mod fBrake) = (fBrake - 1) then
-    begin
-      HandleMessages(
-        GetCurrentThread(),
-        1);
-      Sleep(fGPUPriority);
-    end;
+
     WriteOneFrame(
       fWriteStart,
       fSampleDuration);
+
   end;
   // Force the last one to be a keyframe (?) It compiles and runs, but does it work?
   WriteOneFrame(
     fWriteStart,
-    fSampleDuration);
-  // true);
+    fSampleDuration); //,true);
+
 end;
 
 function TBitmapEncoderWMF.GetAudioDuration: int64;
@@ -1997,60 +1968,38 @@ begin
       result := fAudioDuration div 10000;
 end;
 
-// not working at the moment
-// function TBitmapEncoderWMF.GetEncodingStats: TVideoStats;
-// var
-// hr: HResult;
-// vsLoc: MF_Sink_Writer_Statistics;
-// begin
-// result := Default (TVideoStats);
-// if fInitialized then
-// begin
-// vsLoc.cb := SizeOf(MF_Sink_Writer_Statistics);
-// hr := pSinkWriter.GetStatistics(
-// 0,
-// vsLoc);
-// if succeeded(hr) then
-// result := vsLoc
-// else
-// Raise Exception.Create('GetStatistics returns ' + IntToHex(hr, 8));
-// end;
-// end;
-
-{ TZoom }
-
-function TZoom.ToRectF(Width, Height: integer)
-  : TRectF;
+function TBitmapEncoderWMF.GetResamplingThreadPool: PResamplingThreadPool;
 begin
-  result.Left := max(
-    (xCenter - Radius) * Width,
-    0);
-  result.Right := min(
-    (xCenter + Radius) * Width,
-    Width);
-  result.Top := max(
-    (yCenter - Radius) * Height,
-    0);
-  result.Bottom := min(
-    (yCenter + Radius) * Height,
-    Height);
+  result := @fThreadPool;
 end;
 
+function TBitmapEncoderWMF.GetEncodingStats: TVideoStats;
 var
-  _HrTimer: HResult;
-  _TimerRes: Uint32;
+  hr: HResult;
+  vsLoc: MF_Sink_Writer_Statistics;
+begin
+  vsLoc := Default (TVideoStats);
+  if fInitialized then
+  begin
+    vsLoc.cb := SizeOf(MF_Sink_Writer_Statistics);
+    hr := pSinkWriter.GetStatistics(
+      0,
+      vsLoc);
+    if succeeded(hr) then
+      result := vsLoc
+    else
+      Raise Exception.Create('GetStatistics returns ' + IntToHex(hr, 8));
+  end
+  else
+    result := fLastEncodingStats;
+end;
+
 
 initialization
 
-// Set time resolution for precise waits, try for 1 ms
-_HrTimer := SetTimerResolution(
-  1,
-  _TimerRes);
 
 finalization
 
-if succeeded(_HrTimer) then
-  TimeEndPeriod(_TimerRes);
 
 {$IFDEF O_PLUS}
 {$O+}

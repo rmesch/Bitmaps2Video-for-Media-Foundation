@@ -74,7 +74,8 @@ uses
   uTransformer,
 
   Winapi.MediaFoundationApi.MfApi,
-  Winapi.MediaFoundationApi.MfUtils;
+  Winapi.MediaFoundationApi.MfUtils,
+  Winapi.MediaFoundationApi.MfReadWrite;
 
 const
   MsgUpdate = WM_User + 1;
@@ -160,8 +161,6 @@ type
     ImageList1: TImageList;
     MovieBox: TPaintBox;
     ShowPreview: TCheckBox;
-    Label20: TLabel;
-    EncodePrioritySpin: TSpinEdit;
     Abort: TButton;
     Label22: TLabel;
     Label23: TLabel;
@@ -200,7 +199,6 @@ type
     Splitter4: TSplitter;
     PanelPreview: TPanel;
     PictureBox: TPaintBox;
-    StaticText1: TStaticText;
     ShowWidth: TStaticText;
     CodecInfo: TStaticText;
     OutputInfo: TStaticText;
@@ -216,6 +214,9 @@ type
     ConvertToWav: TCheckBox;
     ConvertToWav1: TCheckBox;
     ConvertToWav2: TCheckBox;
+    Button8: TButton;
+    Label20: TLabel;
+    AudioCodecs: TComboBox;
 
     // Important procedure showing the use of TBitmapEncoderWMF
     procedure WriteAnimationClick(Sender: TObject);
@@ -252,6 +253,7 @@ type
     procedure Button6Click(Sender: TObject);
     procedure Button7Click(Sender: TObject);
     procedure Edit1Click(Sender: TObject);
+    procedure Button8Click(Sender: TObject);
   private
     fDirectoryTree: TDirectoryTree;
     fFileList: TStringlist;
@@ -304,11 +306,11 @@ type
     procedure DisplayVideoInfo(
       const aMemo:     TMemo;
       const VideoInfo: TVideoInfo);
-    function GetGPUPriority: word;
     function GetAdvancedOptions: TEncoderAdvancedOptions;
     procedure ProcessFile(
       const FileN:         string;
       const VideoFileName: string);
+    
     { Private-Deklarationen }
   public
     // properties which read the input parameters for the bitmap-encoder
@@ -319,7 +321,6 @@ type
     property VideoWidth: integer read GetVideoWidth;
     property FrameRate: double read GetFrameRate;
     property Quality: integer read GetQuality;
-    property EncodePriority: word read GetGPUPriority;
     property DoCrop: boolean read GetDoCrop;
     property DoZoomInOut: boolean read GetDoZoomInOut;
     property AudioFile: string read GetAudioFile;
@@ -414,7 +415,7 @@ end;
 procedure TDemoWMFMain.WriteAnimationClick(Sender: TObject);
 var
   i, j, w, h: integer;
-  A, r, theta, dtheta: double;
+  A, r, theta, dtheta, costheta, sintheta: double;
   xCenter, yCenter: integer;
   scale: double;
   bm, pre: TBitmap;
@@ -461,11 +462,10 @@ begin
         Quality,
         FrameRate,
         fCodecList[Codecs.ItemIndex],
-        EncodePrioritySpin.Value,
         cfBicubic);
       bm := TBitmap.Create;
       try
-        // AntiAlias 2*Video-Height
+        // AntiAlias 2*Video-Size
         bm.SetSize(
           2 * w,
           2 * h);
@@ -493,7 +493,8 @@ begin
           for j := 0 to jmax - 1 do
           begin
             r := dist(A * theta);
-            points[j] := map(Pointf(r * cos(theta), r * sin(theta)));
+            SinCos(Theta,sintheta,costheta);
+            points[j] := map(Pointf(r * costheta, r * sintheta));
             theta := theta + dtheta;
           end;
           bm.Canvas.Fillrect(bm.Canvas.clipRect);
@@ -509,7 +510,7 @@ begin
           begin
             pre := TBitmap.Create;
             try
-              uScaleWMF.Resample(
+              Resample(
                 PreviewBox.Width,
                 PreviewBox.Height,
                 bm,
@@ -550,26 +551,6 @@ begin
   end;
 end;
 
-function GetRandomZoom: TZoom; inline;
-var
-  UpperBound: single;
-begin
-  Result.xCenter := 0.5 + (random - 0.5) * 0.8;
-  Result.yCenter := 0.5 + (random - 0.5) * 0.8;
-  UpperBound := min(
-    1 - Result.xCenter,
-    Result.xCenter);
-  UpperBound := min(
-    UpperBound,
-    1 - Result.yCenter);
-  UpperBound := min(
-    UpperBound,
-    Result.yCenter);
-  Assert(UpperBound > 0);
-  Result.Radius := min(
-    0.1 + 0.4 * random,
-    UpperBound);
-end;
 
 procedure TDemoWMFMain.MakeSlideshow(
   const sl:                  TStringlist;
@@ -635,7 +616,6 @@ begin
         crop);
 
     end;
-
     bme.AddStillImage(
       bm,
       ImageTime,
@@ -650,6 +630,7 @@ begin
   end;
   Done := true;
 end;
+
 
 procedure TDemoWMFMain.ShowVideoClick(Sender: TObject);
 begin
@@ -674,6 +655,8 @@ procedure TDemoWMFMain.SlideShowProgress(
   var DoAbort: boolean);
 // var stats: TVideoStats;
 begin
+  Application.ProcessMessages;
+  DoAbort := fUserAbort;
   {
     stats:=TBitmapEncoderWMF(sender).EncodingStats;
     Statistics.Clear;
@@ -682,6 +665,8 @@ begin
     Statistics.Repaint;
   }
 end;
+
+
 
 procedure TDemoWMFMain.WriteSlideshowClick(Sender: TObject);
 var
@@ -695,9 +680,10 @@ var
   af: string;
   i: integer;
   TimeImage, TimeTransition: integer;
-  SlideshowTime: int64;
+  SlideshowTime, AudioTime: int64;
   VideoInfo: TVideoInfo;
   WaveFileName: string;
+  VideoStats: TVideoStats;
 begin
   if fWriting then
   begin
@@ -706,6 +692,7 @@ begin
   end;
   af := '';
   WaveFileName := '';
+  AudioTime:=0;
   if AudioDialog then
   begin
     af := AudioFile;
@@ -714,8 +701,10 @@ begin
       ShowMessage('No audio file selected');
       exit;
     end;
+    AudioTime:=trunc(1/10000*GetAudioDuration(af));
   end;
   fWriting := true;
+  fUserAbort := false;
   // Use a local stringlist because of threading
   sl := TStringlist.Create;
   try
@@ -727,11 +716,22 @@ begin
       ShowMessage('No image files selected');
       exit;
     end;
+    TimeImage := ImageTime.Value;
+    TimeTransition := TransitionTime.Value;
+    if AdjustToAudio.Checked then
+      begin
+        TimeImage :=
+          round((AudioTime + AudioStart - sl.Count *
+          TimeTransition) /
+          sl.Count);
+        if MessageDlg('Calculated image time: ' + TimeImage.ToString + ' ms',
+          mtConfirmation, [mbYes, mbNo], 0) = mrNo then
+       exit;
+      end;
+    SlideshowTime:=sl.Count*(TimeImage+TimeTransition);
     bme := TBitmapEncoderWMF.Create;
     bm := TBitmap.Create;
     wic := TWicImage.Create;
-    TimeImage := ImageTime.Value;
-    TimeTransition := TransitionTime.Value;
     StopWatch := TStopWatch.Create;
     try
       Status.Caption := 'Working';
@@ -740,15 +740,24 @@ begin
       try
         // Set advanced options
         bme.EncoderAdvancedOptions := Self.EncoderAdvancedOptions;
+
         if (af <> '') and ConvertToWav.Checked then
         begin
           WaveFileName := ExtractFilePath(Application.ExeName) +
             'Convert.wav';
+          if AdjustToAudio.Checked then
           SaveAudioStreamAsWav(
             af,
-            WaveFileName);
+            WaveFileName,
+            0)
+            else
+            SaveAudioStreamAsWav(
+            af,
+            WaveFileName,
+            SlideshowTime);
           af := WaveFileName;
         end;
+
         bme.Initialize(
           OutputFileName,
           VideoWidth,
@@ -756,9 +765,9 @@ begin
           Quality,
           FrameRate,
           fCodecList[Codecs.ItemIndex],
-          EncodePriority,
-          cfBicubic,
+          cfRobidouxSharp,
           af,
+          TAudioCodecId(AudioCodecs.ItemIndex),
           AudioBitRate,
           AudioSampleRate,
           AudioStart);
@@ -778,20 +787,6 @@ begin
       end;
       bme.OnProgress := SlideShowProgress;
       bme.TimingDebug := DebugTiming.Checked;
-
-      if AdjustToAudio.Checked then
-      begin
-        TimeImage :=
-          round((bme.AudioFileDuration + AudioStart - sl.Count *
-          (TimeTransition - 0.03)) /
-          sl.Count);
-        if MessageDlg('Calculated image time: ' + TimeImage.ToString + ' ms',
-          mtConfirmation, [mbYes, mbNo], 0) = mrNo then
-        begin
-          bme.Finalize;
-          exit;
-        end;
-      end;
 
       if Background.Checked then
       begin
@@ -830,16 +825,18 @@ begin
           TimeTransition);
       end;
       StopWatch.Stop;
-      bme.Finalize;
       Status.Caption :=
         'Writing speed including decoding of image files and computing transitions: '
         + FloatToStrF(1000 * bme.FrameCount / StopWatch.ElapsedMilliseconds,
         ffFixed, 5, 2) + ' fps';
+      //Get the status of the sinkwrite before calling Finalize.
+      //The queued up frames haven't been flushed yet.
+      VideoStats:=bme.EncodingStats;
+      bme.Finalize;
       Status.Repaint;
       Stats.Lines.BeginUpdate;
       try
         Stats.Clear;
-        SlideshowTime := sl.Count * (TimeImage + TimeTransition);
         Stats.Lines.Add('Slideshow time: ' +
           SlideshowTime.ToString + ' ms' + ' (' +
           Winapi.MediaFoundationApi.MfUtils.HnsTimeToStr(SlideshowTime * 10000,
@@ -853,7 +850,21 @@ begin
           bme.AudioFileDuration.ToString + ' ms');
         Stats.Lines.Add('File size: ' + (round(100 * GetFileSize(OutputFileName) /
           1024 / 1024) / 100).ToString + ' MB');
-
+        Stats.Lines.Add('Sinkwriter statistics before call to bme.Finalize:');
+        Stats.Lines.Add('Samples received: '+VideoStats.qwNumSamplesReceived.ToString);
+        Stats.Lines.Add('Samples encoded: '+VideoStats.qwNumSamplesEncoded.ToString);
+        Stats.Lines.Add('Samples processed: '+VideoStats.qwNumSamplesProcessed.ToString);
+        Stats.Lines.Add('ByteCountQueued: '+VideoStats.dwByteCountQueued.ToString);
+        Stats.Lines.Add('AverageSampleRateReceived: '+VideoStats.dwAverageSampleRateReceived.ToString);
+        Stats.Lines.Add('AverageSampleRateEncoded: '+VideoStats.dwAverageSampleRateEncoded.ToString);
+        VideoStats:=bme.EncodingStats;
+        Stats.Lines.Add('Sinkwriter statistics after call to bme.Finalize:');
+        Stats.Lines.Add('Samples received: '+VideoStats.qwNumSamplesReceived.ToString);
+        Stats.Lines.Add('Samples encoded: '+VideoStats.qwNumSamplesEncoded.ToString);
+        Stats.Lines.Add('Samples processed: '+VideoStats.qwNumSamplesProcessed.ToString);
+        Stats.Lines.Add('ByteCountQueued: '+VideoStats.dwByteCountQueued.ToString);
+        Stats.Lines.Add('AverageSampleRateReceived: '+VideoStats.dwAverageSampleRateReceived.ToString);
+        Stats.Lines.Add('AverageSampleRateEncoded: '+VideoStats.dwAverageSampleRateEncoded.ToString);
         Stats.SelStart := 0;
         Stats.SelLength := 0;
         Stats.Perform(
@@ -915,7 +926,7 @@ begin
         WaveFileName := ExtractFilePath(Application.ExeName) + 'Convert.wav';
         SaveAudioStreamAsWav(
           af,
-          WaveFileName);
+          WaveFileName,0);
         af := WaveFileName;
       end;
     end;
@@ -935,9 +946,9 @@ begin
           Quality,
           FrameRate,
           TCodecID(Codecs.ItemIndex),
-          EncodePriority,
           cfBicubic,
           af,
+          AAC,
           128,
           44100,
           9000);
@@ -1096,7 +1107,6 @@ begin
         VideoWidth,
         VideoHeight,
         FrameRate,
-        EncodePriority,
         CropToAspect.Checked,
         StretchToAspect.Checked,
         ConvertToWav2.Checked,
@@ -1290,7 +1300,7 @@ begin
     SEE_MASK_NOCLOSEPROCESS;
   Sei.lpFile := PChar('cmd.exe');
   Sei.lpParameters := PChar('/c ffprobe.exe -show_frames ' + '"' +
-    FODVideo.fileName + '" > AVframes.txt');
+    FODAudio.fileName + '" > AVframes.txt');
   Sei.lpVerb := PChar('');
   Sei.nShow := SW_Hide;
   Status.Caption := 'Working';
@@ -1306,11 +1316,16 @@ begin
     CloseHandle(Sei.hProcess);
     ProcessFile(
       'AVFrames.txt',
-      FODVideo.fileName);
+      FODAudio.fileName);
     Status.Caption := 'Done';
   end
   else
     Status.Caption := 'Failed';
+end;
+
+procedure TDemoWMFMain.Button8Click(Sender: TObject);
+begin
+  fUserAbort := true;
 end;
 
 procedure TDemoWMFMain.PickAudioClick(Sender: TObject);
@@ -1332,7 +1347,7 @@ var
 begin
   fDirectoryTree.GetAllFiles(
     fFileList,
-    '*.bmp;*.jpg;*.png;*.gif');
+    '*.bmp;*.jpg;*.png;*.gif;*.tif');
   FileBox.Clear;
   for i := 0 to fFileList.Count - 1 do
   begin
@@ -1348,7 +1363,7 @@ var
   dr: TRect;
 begin
   ImageCount.Caption := FileBox.SelCount.ToString +
-    ' images selected (bmp, jpg, png, gif)';
+    ' images selected (bmp, jpg, png, gif, tif)';
   if FileBox.ItemIndex >= 0 then
   begin
     // item clicked on
@@ -1485,6 +1500,11 @@ end;
 
 function TDemoWMFMain.GetAdvancedOptions: TEncoderAdvancedOptions;
 begin
+  if DisableThrottling.Checked then
+  begin
+    if MessageDlg('Disabling the throttling of the main thread can lead to unexpected results. Are you sure?',mtWarning,[mbYes,mbNo],0)=mrNo then
+    exit;
+  end;
   Result.DisableHardwareEncoding := DisableHardwareEncoding.Checked;
   Result.DisableThrottling := DisableThrottling.Checked;
   Result.DisableQualityBasedEncoding := DisableQualityBasedEncoding.Checked;
@@ -1547,7 +1567,8 @@ begin
 end;
 
 const
-  FrameRateArray: array [0 .. 8] of double = (25, 29.97, 30, 31.25, 45, 46.875,
+  FrameRateArray: array [0 .. 9] of double = (25, 29.296875, 29.97, 30, 31.25,
+    45, 46.875,
     60, 90, 120);
 
 function TDemoWMFMain.GetFrameRate: double;
@@ -1555,10 +1576,6 @@ begin
   Result := FrameRateArray[FrameRates.ItemIndex];
 end;
 
-function TDemoWMFMain.GetGPUPriority: word;
-begin
-  Result := EncodePrioritySpin.Value;
-end;
 
 function TDemoWMFMain.GetOutputFileName: string;
 begin

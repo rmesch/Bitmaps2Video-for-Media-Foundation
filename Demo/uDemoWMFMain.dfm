@@ -70,13 +70,6 @@ object DemoWMFMain: TDemoWMFMain
       Height = 15
       Caption = 'Only .mp4 presently'
     end
-    object Label20: TLabel
-      Left = 8
-      Top = 359
-      Width = 85
-      Height = 15
-      Caption = 'Encode-priority:'
-    end
     object FileExt: TComboBox
       Left = 8
       Top = 24
@@ -139,7 +132,7 @@ object DemoWMFMain: TDemoWMFMain
       Top = 289
       Width = 171
       Height = 24
-      MaxValue = 200
+      MaxValue = 100
       MinValue = 10
       TabOrder = 4
       Value = 80
@@ -150,11 +143,12 @@ object DemoWMFMain: TDemoWMFMain
       Width = 171
       Height = 23
       Style = csDropDownList
-      ItemIndex = 2
+      ItemIndex = 3
       TabOrder = 5
       Text = '30'
       Items.Strings = (
         '25'
+        '29.297875'
         '29.97'
         '30'
         '31.25 (good for 48000 audio)'
@@ -164,23 +158,13 @@ object DemoWMFMain: TDemoWMFMain
         '90'
         '120')
     end
-    object EncodePrioritySpin: TSpinEdit
-      Left = 8
-      Top = 376
-      Width = 171
-      Height = 24
-      MaxValue = 20
-      MinValue = 0
-      TabOrder = 6
-      Value = 2
-    end
     object OutputPanel: TPanel
       Left = 1
-      Top = 416
+      Top = 396
       Width = 266
-      Height = 194
+      Height = 214
       Align = alBottom
-      TabOrder = 7
+      TabOrder = 6
       object ShowVideo: TButton
         Left = 82
         Top = 156
@@ -216,20 +200,6 @@ object DemoWMFMain: TDemoWMFMain
         StyleElements = [seFont, seBorder]
       end
     end
-    object StaticText1: TStaticText
-      Left = 8
-      Top = 398
-      Width = 257
-      Height = 19
-      AutoSize = False
-      BorderStyle = sbsSingle
-      Caption = 'Decrease for speed, increase if video stutters.'
-      Color = clInfoBk
-      ParentColor = False
-      TabOrder = 8
-      Transparent = False
-      StyleElements = [seFont, seBorder]
-    end
     object ShowWidth: TStaticText
       Left = 8
       Top = 201
@@ -240,7 +210,7 @@ object DemoWMFMain: TDemoWMFMain
       Caption = 'ShowWidth'
       Color = clInfoBk
       ParentColor = False
-      TabOrder = 9
+      TabOrder = 7
       Transparent = False
       StyleElements = [seFont, seBorder]
     end
@@ -255,7 +225,7 @@ object DemoWMFMain: TDemoWMFMain
       Caption = 'CodecInfo'
       Color = clInfoBk
       ParentColor = False
-      TabOrder = 10
+      TabOrder = 8
       Transparent = False
       StyleElements = [seFont, seBorder]
     end
@@ -335,7 +305,7 @@ object DemoWMFMain: TDemoWMFMain
           WordWrap = True
         end
         object WriteAnimation: TButton
-          Left = 39
+          Left = 41
           Top = 353
           Width = 75
           Height = 25
@@ -345,15 +315,15 @@ object DemoWMFMain: TDemoWMFMain
         end
         object AdvancedPanel: TPanel
           Left = 420
-          Top = 169
-          Width = 227
+          Top = 168
+          Width = 247
           Height = 182
           Color = clWindow
           ParentBackground = False
           TabOrder = 1
           Visible = False
           DesignSize = (
-            227
+            247
             182)
           object Label13: TLabel
             Left = 12
@@ -368,7 +338,7 @@ object DemoWMFMain: TDemoWMFMain
           object Button3: TButton
             Left = 136
             Top = 157
-            Width = 87
+            Width = 107
             Height = 20
             Anchors = [akLeft, akRight, akBottom]
             Caption = 'Close'
@@ -385,10 +355,10 @@ object DemoWMFMain: TDemoWMFMain
           end
           object DisableThrottling: TCheckBox
             Left = 12
-            Top = 39
-            Width = 163
+            Top = 41
+            Width = 221
             Height = 17
-            Caption = 'Disable throttling'
+            Caption = 'Disable throttling (not recommended)'
             TabOrder = 2
           end
           object DisableQualityBasedEncoding: TCheckBox
@@ -409,17 +379,17 @@ object DemoWMFMain: TDemoWMFMain
           end
           object ThreadlimitSpin: TSpinEdit
             Left = 133
-            Top = 130
+            Top = 131
             Width = 63
             Height = 24
             MaxValue = 16
             MinValue = 2
             TabOrder = 5
-            Value = 4
+            Value = 16
           end
           object DisableGOPSize: TCheckBox
             Left = 12
-            Top = 110
+            Top = 113
             Width = 205
             Height = 17
             Caption = 'Disable GOP-size and threads limit'
@@ -432,25 +402,25 @@ object DemoWMFMain: TDemoWMFMain
         ImageIndex = 1
         object Splitter2: TSplitter
           Left = 0
-          Top = 271
+          Top = 261
           Width = 771
           Height = 3
           Cursor = crVSplit
           Align = alBottom
-          ExplicitTop = 0
-          ExplicitWidth = 248
+          ExplicitLeft = -26
+          ExplicitTop = 271
         end
         object Panel4: TPanel
           Left = 0
-          Top = 274
+          Top = 264
           Width = 771
-          Height = 261
+          Height = 271
           Align = alBottom
           BevelOuter = bvNone
           TabOrder = 0
           DesignSize = (
             771
-            261)
+            271)
           object Panel5: TPanel
             Left = 0
             Top = 0
@@ -460,22 +430,22 @@ object DemoWMFMain: TDemoWMFMain
             BevelOuter = bvNone
             TabOrder = 0
             object Label7: TLabel
-              Left = 390
-              Top = 29
+              Left = 394
+              Top = 49
               Width = 102
               Height = 15
               Caption = 'Audio sample rate: '
             end
             object Label10: TLabel
-              Left = 498
-              Top = 28
+              Left = 502
+              Top = 48
               Width = 118
               Height = 15
               Caption = 'Audio bitrate [kb/sec]:'
             end
             object Label11: TLabel
-              Left = 390
-              Top = 75
+              Left = 394
+              Top = 95
               Width = 321
               Height = 44
               Alignment = taCenter
@@ -490,8 +460,8 @@ object DemoWMFMain: TDemoWMFMain
               WordWrap = True
             end
             object Label12: TLabel
-              Left = 621
-              Top = 28
+              Left = 625
+              Top = 48
               Width = 89
               Height = 15
               Caption = 'Audio Start [ms] '
@@ -521,6 +491,13 @@ object DemoWMFMain: TDemoWMFMain
               Width = 105
               Height = 15
               Caption = 'Transition time [ms]'
+            end
+            object Label20: TLabel
+              Left = 394
+              Top = 28
+              Width = 73
+              Height = 15
+              Caption = 'Audio codec: '
             end
             object Background: TCheckBox
               Left = 24
@@ -560,8 +537,8 @@ object DemoWMFMain: TDemoWMFMain
               WordWrap = True
             end
             object SampleRate: TComboBox
-              Left = 389
-              Top = 46
+              Left = 393
+              Top = 66
               Width = 103
               Height = 23
               Style = csDropDownList
@@ -573,8 +550,8 @@ object DemoWMFMain: TDemoWMFMain
                 '48000')
             end
             object Bitrate: TComboBox
-              Left = 507
-              Top = 46
+              Left = 511
+              Top = 66
               Width = 100
               Height = 23
               Style = csDropDownList
@@ -588,8 +565,8 @@ object DemoWMFMain: TDemoWMFMain
                 '192')
             end
             object AudioStartTime: TSpinEdit
-              Left = 621
-              Top = 45
+              Left = 625
+              Top = 65
               Width = 94
               Height = 24
               Increment = 1000
@@ -599,8 +576,8 @@ object DemoWMFMain: TDemoWMFMain
               Value = 0
             end
             object AddAudio: TCheckBox
-              Left = 390
-              Top = 4
+              Left = 393
+              Top = 3
               Width = 241
               Height = 25
               Caption = 'Display dialog to add an audio file'
@@ -629,27 +606,40 @@ object DemoWMFMain: TDemoWMFMain
               Value = 4000
             end
             object AdjustToAudio: TCheckBox
-              Left = 394
-              Top = 122
+              Left = 398
+              Top = 142
               Width = 249
               Height = 17
               Caption = 'Adjust presentation time to audio time'
               TabOrder = 10
             end
             object ConvertToWav: TCheckBox
-              Left = 394
-              Top = 145
+              Left = 398
+              Top = 165
               Width = 244
               Height = 17
               Caption = 'Convert audio to .wav before encoding'
               TabOrder = 11
             end
+            object AudioCodecs: TComboBox
+              Left = 478
+              Top = 24
+              Width = 173
+              Height = 23
+              Style = csDropDownList
+              ItemIndex = 0
+              TabOrder = 12
+              Text = 'AAC (Normal for .mp4)'
+              Items.Strings = (
+                'AAC (Normal for .mp4)'
+                'FLAC (Lossless compression)')
+            end
           end
           object Stats: TMemo
             Left = 394
-            Top = 170
+            Top = 188
             Width = 337
-            Height = 89
+            Height = 81
             Anchors = [akLeft, akBottom]
             Lines.Strings = (
               'Stats')
@@ -657,8 +647,8 @@ object DemoWMFMain: TDemoWMFMain
             TabOrder = 1
           end
           object WriteSlideshow: TButton
-            Left = 23
-            Top = 205
+            Left = 24
+            Top = 218
             Width = 269
             Height = 38
             Anchors = [akLeft, akBottom]
@@ -673,19 +663,35 @@ object DemoWMFMain: TDemoWMFMain
             WordWrap = True
             OnClick = WriteSlideshowClick
           end
+          object Button8: TButton
+            Left = 304
+            Top = 216
+            Width = 75
+            Height = 39
+            Anchors = [akLeft, akBottom]
+            Caption = 'Abort'
+            Font.Charset = DEFAULT_CHARSET
+            Font.Color = clWindowText
+            Font.Height = -12
+            Font.Name = 'Segoe UI'
+            Font.Style = [fsBold]
+            ParentFont = False
+            TabOrder = 3
+            OnClick = Button8Click
+          end
         end
         object Panel1: TPanel
           Left = 0
           Top = 0
           Width = 771
-          Height = 271
+          Height = 261
           Align = alClient
           BevelOuter = bvNone
           TabOrder = 1
           object Splitter3: TSplitter
             Left = 289
             Top = 0
-            Height = 271
+            Height = 261
             ExplicitLeft = 328
             ExplicitTop = -10
             ExplicitHeight = 316
@@ -693,7 +699,7 @@ object DemoWMFMain: TDemoWMFMain
           object Splitter4: TSplitter
             Left = 599
             Top = 0
-            Height = 271
+            Height = 261
             ExplicitLeft = 672
             ExplicitTop = 142
             ExplicitHeight = 100
@@ -702,7 +708,7 @@ object DemoWMFMain: TDemoWMFMain
             Left = 0
             Top = 0
             Width = 289
-            Height = 271
+            Height = 261
             Align = alLeft
             Caption = 'Panel3'
             TabOrder = 0
@@ -746,7 +752,7 @@ object DemoWMFMain: TDemoWMFMain
               Left = 1
               Top = 26
               Width = 287
-              Height = 244
+              Height = 234
               Align = alClient
               BevelOuter = bvNone
               TabOrder = 1
@@ -756,7 +762,7 @@ object DemoWMFMain: TDemoWMFMain
             Left = 292
             Top = 0
             Width = 307
-            Height = 271
+            Height = 261
             Align = alLeft
             Caption = 'Panel6'
             TabOrder = 1
@@ -797,7 +803,7 @@ object DemoWMFMain: TDemoWMFMain
               Left = 1
               Top = 26
               Width = 305
-              Height = 244
+              Height = 234
               Align = alClient
               BevelInner = bvNone
               BevelOuter = bvNone
@@ -810,7 +816,7 @@ object DemoWMFMain: TDemoWMFMain
             Left = 602
             Top = 0
             Width = 169
-            Height = 271
+            Height = 261
             Align = alClient
             BevelOuter = bvNone
             TabOrder = 2
@@ -852,7 +858,7 @@ object DemoWMFMain: TDemoWMFMain
         object AudioFileName: TLabel
           Left = 151
           Top = 156
-          Width = 60
+          Width = 46
           Height = 15
           Caption = 'Optional'
         end
@@ -1162,7 +1168,7 @@ object DemoWMFMain: TDemoWMFMain
           OnClick = Button6Click
         end
         object Button7: TButton
-          Left = 206
+          Left = 208
           Top = 74
           Width = 156
           Height = 25

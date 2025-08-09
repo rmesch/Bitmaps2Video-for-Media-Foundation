@@ -4,7 +4,7 @@
 //
 // Intiator(s): Renate Schaaf
 // Contributor(s): Renate Schaaf,
-//                 Tony Kalf (maXcomX) https://github.com/FactoryXCode/MfPack
+// Tony Kalf (maXcomX) https://github.com/FactoryXCode/MfPack
 //
 // Release date: June 2025
 // =============================================================================
@@ -14,7 +14,7 @@
 // Special thanks to Anders Melander for helpful discussions about the
 // alpha-channel on
 // https://en.delphipraxis.net/
-//==============================================================================
+// ==============================================================================
 // =============================================================================
 //
 // LICENSE
@@ -158,7 +158,197 @@ function FloatRect(Aleft, ATop, ARight, ABottom: double)
 function FloatRect(ARect: TRect)
   : TFloatRect; overload; inline;
 
+procedure CropToTarget(
+  NewWidth, NewHeight:  integer;
+  const Source, Target: TBitmap;
+  Filter:               TFilter;
+  Radius:               single;
+  Parallel:             boolean;
+  AlphaCombineMode:     TAlphaCombineMode = amIgnore;
+  ThreadPool:           PResamplingThreadPool = nil);
+
+procedure ScaleToNewHeight(
+  NewHeight:            integer;
+  const Source, Target: TBitmap;
+  Filter:               TFilter;
+  Radius:               single;
+  Parallel:             boolean;
+  AlphaCombineMode:     TAlphaCombineMode = amIgnore;
+  ThreadPool:           PResamplingThreadPool = nil);
+
+procedure ScaleToNewWidth(
+  NewWidth:             integer;
+  const Source, Target: TBitmap;
+  Filter:               TFilter;
+  Radius:               single;
+  Parallel:             boolean;
+  AlphaCombineMode:     TAlphaCombineMode = amIgnore;
+  ThreadPool:           PResamplingThreadPool = nil);
+
+procedure MaximizeToRect(
+  ARect:                TRect;
+  var DisplayRect:      TRect;
+  const Source, Target: TBitmap;
+  Filter:               TFilter;
+  Radius:               single;
+  Parallel:             boolean;
+  AlphaCombineMode:     TAlphaCombineMode = amIgnore;
+  ThreadPool:           PResamplingThreadPool = nil
+  );
+
 implementation
+
+procedure MaximizeToRect(
+  ARect:                TRect;
+  var DisplayRect:      TRect;
+  const Source, Target: TBitmap;
+  Filter:               TFilter;
+  Radius:               single;
+  Parallel:             boolean;
+  AlphaCombineMode:     TAlphaCombineMode = amIgnore;
+  ThreadPool:           PResamplingThreadPool = nil
+  );
+var
+  wRect, hRect: integer;
+  asp, aspRect: double;
+  dLeft, dTop: integer;
+begin
+  wRect := ARect.Right - ARect.Left;
+  hRect := ARect.Bottom - ARect.Top;
+  Assert((Source.Width <> 0) and (Source.Height <> 0) and (wRect <> 0) and
+    (hRect <> 0));
+  asp := Source.Width / Source.Height;
+  aspRect := wRect / hRect;
+  if asp > aspRect then // scale to wRect
+  begin
+    Target.Width := wRect;
+    Target.Height := round(wRect / asp);
+  end
+  else
+  begin
+    Target.Height := hRect;
+    Target.Width := round(hRect * asp);
+  end;
+  uScaleWMF.Resample(
+    Target.Width,
+    Target.Height,
+    Source,
+    Target,
+    Filter,
+    Radius,
+    Parallel,
+    AlphaCombineMode,
+    ThreadPool);
+  dLeft := (wRect - Target.Width) div 2;
+  dTop := (hRect - Target.Height) div 2;
+  DisplayRect := Rect(
+    dLeft,
+    dTop,
+    dLeft + Target.Width,
+    dTop + Target.Height);
+end;
+
+procedure ScaleToNewWidth(
+  NewWidth:             integer;
+  const Source, Target: TBitmap;
+  Filter:               TFilter;
+  Radius:               single;
+  Parallel:             boolean;
+  AlphaCombineMode:     TAlphaCombineMode = amIgnore;
+  ThreadPool:           PResamplingThreadPool = nil);
+var NewHeight: integer;
+begin
+  NewHeight := round(NewWidth * Source.Height / Source.Width);
+  Resample(
+    NewWidth,
+    NewHeight,
+    Source,
+    Target,
+    Filter,
+    Radius,
+    Parallel,
+    AlphaCombineMode,
+    ThreadPool);
+end;
+
+procedure ScaleToNewHeight(
+  NewHeight:            integer;
+  const Source, Target: TBitmap;
+  Filter:               TFilter;
+  Radius:               single;
+  Parallel:             boolean;
+  AlphaCombineMode:     TAlphaCombineMode = amIgnore;
+  ThreadPool:           PResamplingThreadPool = nil);
+var NewWidth: integer;
+begin
+  NewWidth := round(NewHeight * Source.Width / Source.Height);
+  Resample(
+    NewWidth,
+    NewHeight,
+    Source,
+    Target,
+    Filter,
+    Radius,
+    Parallel,
+    AlphaCombineMode,
+    ThreadPool);
+end;
+
+procedure CropToTarget(
+  NewWidth, NewHeight:  integer;
+  const Source, Target: TBitmap;
+  Filter:               TFilter;
+  Radius:               single;
+  Parallel:             boolean;
+  AlphaCombineMode:     TAlphaCombineMode = amIgnore;
+  ThreadPool:           PResamplingThreadPool = nil);
+var SourceRect: TRectF;
+  w, h, l, t: double;
+begin
+  If NewWidth * Source.Height > Source.Width * NewHeight
+  // target asp > source asp
+  then
+  // crop top/bottom
+  begin
+    w := Source.Width;
+    h := Source.Width * NewHeight / NewWidth;
+    l := 0;
+    t := 0.5 * (Source.Height - h)
+  end
+  else
+  begin
+    h := Source.Height;
+    w := Source.Height * NewWidth / NewHeight;
+    l := 0.5 * (Source.Width - w);
+    t := 0;
+  end;
+  SourceRect := FloatRect(
+    l,
+    t,
+    l + w,
+    t + h);
+  if Parallel then
+    ZoomResample(
+      NewWidth,
+      NewHeight,
+      Source,
+      Target,
+      SourceRect,
+      Filter,
+      Radius,
+      AlphaCombineMode)
+  else
+    ZoomResampleParallelThreads(
+      NewWidth,
+      NewHeight,
+      Source,
+      Target,
+      SourceRect,
+      Filter,
+      Radius,
+      AlphaCombineMode,
+      ThreadPool);
+end;
 
 function FloatRect(Aleft, ATop, ARight, ABottom: double)
   : TFloatRect;
@@ -176,7 +366,7 @@ begin
   Result := TRectF(ARect);
 end;
 
-//should now work with XE2 or at least with XE7
+// should now work with XE2 or at least with XE7
 function GetResamplingTask(
   RTS:              TResamplingThreadSetup;
   Index:            integer;
@@ -348,8 +538,8 @@ begin
   Target.SetSize(
     NewWidth,
     NewHeight);
-  Tbps := -((NewWidth * 32 + 31) and not 31) div 8;
-  Sbps := -((Source.Width * 32 + 31) and not 31) div 8;
+  Tbps := -4 * NewWidth;
+  Sbps := -4 * Source.Width;
 
   RTS.PrepareResamplingThreads(
     NewWidth,

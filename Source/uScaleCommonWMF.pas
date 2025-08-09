@@ -57,11 +57,12 @@ uses System.Types, System.UITypes,
 
 type
   // Filter types
-  TFilter = (cfBox, cfBilinear, cfBicubic, cfMine, cfLanczos, cfBSpline);
+  TFilter = (cfBox, cfBilinear, cfBicubic, cfMine, cfLanczos, cfBSpline,
+    cfMitchell, cfRobidoux, cfRobidouxSharp, cfRobidouxSoft);
 
 const
   // Default radii for the filters, can be made a tad smaller for performance
-  DefaultRadius: array [TFilter] of single = (0.5, 1, 2, 2, 3, 2);
+  DefaultRadius: array [TFilter] of single = (0.5, 1, 2, 2, 3, 2, 2, 2, 2, 2);
 
 type
   // happens right now, if you use a custom thread pool which has not been initialized
@@ -166,6 +167,23 @@ type
 
   //PResamplingThreadSetup = ^TResamplingThreadSetup;
 
+  // TZoom is a record (xcenter, ycenter, radius) defining a virtual zoom-rectangle
+  // (xcenter-radius, ycenter-radius, xcenter+radius, ycenter+radius).
+  // This rectangle should be a sub-rectangle of [0,1]x[0,1].
+  // If multipied by the width/height of a target rectangle, it defines
+  // an aspect-preserving sub-rectangle of the target.
+  TZoom = record
+    xCenter, yCenter: single;
+    Radius: single;
+    function ToRectF(Width, Height: integer)
+      : TRectF; inline;
+  end;
+
+const
+  _FullZoom: TZoom = (xCenter: 0.5; yCenter: 0.5; Radius: 0.5);
+
+function GetRandomZoom: TZoom; inline;
+
 var
   _DefaultThreadPool: TResamplingThreadPool;
   _IsFMX: boolean; //value is set in initialization of uScale and uScaleFMX
@@ -182,9 +200,30 @@ procedure InitDefaultResamplingThreads;
 procedure FinalizeDefaultResamplingThreads;
 
 procedure ProcessRow(y: integer; CacheStart: PBGRAInt;
-  const RTS: TResamplingThreadSetup; AlphaCombineMode: TAlphaCombineMode); inline;
+  RTS: TResamplingThreadSetup; AlphaCombineMode: TAlphaCombineMode); inline;
 
 implementation
+
+function GetRandomZoom: TZoom; inline;
+var
+  UpperBound: single;
+begin
+  Result.xCenter := 0.5 + (random - 0.5) * 0.6;
+  Result.yCenter := 0.5 + (random - 0.5) * 0.6;
+  UpperBound := Min(
+    1 - Result.xCenter,
+    Result.xCenter);
+  UpperBound := Min(
+    UpperBound,
+    1 - Result.yCenter);
+  UpperBound := Min(
+    UpperBound,
+    Result.yCenter);
+  Assert(UpperBound > 0);
+  Result.Radius := Min(
+    0.1 + 0.4 * random,
+    UpperBound);
+end;
 
 type
   TFilterFunction = function(x: double): double;
@@ -274,9 +313,82 @@ begin
     Result := 0;
 end;
 
+// The following filters are based on the Mitchell-Netravali filters with
+// restricting the parameters B and C to the "good" line B + 2*C = 1.
+// We have eliminated B this way and scaled the filter to [-1,1].
+// See https://en.wikipedia.org/wiki/Mitchell%E2%80%93Netravali_filters
+// Thanks to Kas Ob. for suggesting them in https://en.delphipraxis.net/
+const
+  C_M = 1 / 3;
+
+  // Mitchell filter used by ImageMagick
+function Mitchell(x: double): double; inline;
+begin
+  x := abs(x);
+  if x < 0.5 then
+    Result := (8 + 32 * C_M) * x * x * x - (8 + 24 * C_M) * x * x + 4 / 3 +
+      4 / 3 * C_M
+  else if x < 1 then
+    Result := -(8 / 3 + 32 / 3 * C_M) * x * x * x + (8 + 24 * C_M) * x * x -
+      (8 + 16 * C_M) * x + 8 / 3 + 8 / 3 * C_M
+  else
+    Result := 0;
+end;
+
+const
+  C_R = 0.3109;
+
+  // Robidoux filter
+function Robidoux(x: double): double; inline;
+begin
+  x := abs(x);
+  if x < 0.5 then
+    Result := (8 + 32 * C_R) * x * x * x - (8 + 24 * C_R) * x * x + 4 / 3 +
+      4 / 3 * C_R
+  else if x < 1 then
+    Result := -(8 / 3 + 32 / 3 * C_R) * x * x * x + (8 + 24 * C_R) * x * x -
+      (8 + 16 * C_R) * x + 8 / 3 + 8 / 3 * C_R
+  else
+    Result := 0;
+end;
+
+const
+  C_RS = 0.3690;
+
+  // Robidoux-Sharp filter
+function RobidouxSharp(x: double): double; inline;
+begin
+  x := abs(x);
+  if x < 0.5 then
+    Result := (8 + 32 * C_RS) * x * x * x - (8 + 24 * C_RS) * x * x + 4 / 3 + 4
+      / 3 * C_RS
+  else if x < 1 then
+    Result := -(8 / 3 + 32 / 3 * C_RS) * x * x * x + (8 + 24 * C_RS) * x * x -
+      (8 + 16 * C_RS) * x + 8 / 3 + 8 / 3 * C_RS
+  else
+    Result := 0;
+end;
+
+const
+  C_RD = 0.1602;
+
+  // Robidoux-Soft filter
+function RobidouxSoft(x: double): double; inline;
+begin
+  x := abs(x);
+  if x < 0.5 then
+    Result := (8 + 32 * C_RD) * x * x * x - (8 + 24 * C_RD) * x * x + 4 / 3 + 4
+      / 3 * C_RD
+  else if x < 1 then
+    Result := -(8 / 3 + 32 / 3 * C_RD) * x * x * x + (8 + 24 * C_RD) * x * x -
+      (8 + 16 * C_RD) * x + 8 / 3 + 8 / 3 * C_RD
+  else
+    Result := 0;
+end;
+
 const
   FilterFunctions: array [TFilter] of TFilterFunction = (Box, Linear, Bicubic,
-    Mine, Lanczos, BSpline);
+    Mine, Lanczos, BSpline, Mitchell, Robidoux, RobidouxSharp, RobidouxSoft);
 
   PrecisionFacts: array [TPrecision] of integer = ($100, $800);
   PreMultPrecision = 1 shl 2;
@@ -518,7 +630,7 @@ begin
 end;
 
 procedure ProcessRow(y: integer; CacheStart: PBGRAInt;
-  const RTS: TResamplingThreadSetup; AlphaCombineMode: TAlphaCombineMode); inline;
+  RTS: TResamplingThreadSetup; AlphaCombineMode: TAlphaCombineMode); inline;
 var
   ps, pT: PBGRA;
   rs, rT: PByte;
@@ -770,6 +882,25 @@ begin
   if not _DefaultThreadPool.fInitialized then
     exit;
   _DefaultThreadPool.Finalize;
+end;
+
+{ TZoom }
+
+function TZoom.ToRectF(Width, Height: integer)
+  : TRectF;
+begin
+  Result.Left := max(
+    (xCenter - Radius) * Width,
+    0);
+  Result.Right := Min(
+    (xCenter + Radius) * Width,
+    Width);
+  Result.Top := max(
+    (yCenter - Radius) * Height,
+    0);
+  Result.Bottom := Min(
+    (yCenter + Radius) * Height,
+    Height);
 end;
 
 initialization

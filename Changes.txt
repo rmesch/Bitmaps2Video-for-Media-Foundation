@@ -1,3 +1,8 @@
+2025-08-09
+Fixed the root of all video-stuttering and timing issues. Hardware-encoding got faster. No more need to alter the timer-resolution or to put sleeps all over the code. Parameter EncodePriority no longer necessary.
+
+Added option to encode audio to FLAC besides AAC.
+
 2025-07-08
 Audio-synching is optimal if the audio-input comes from a .wav-file. You can use the utility uTransformer.SaveAudioStreamAsWav to transform an audio-file or the 1st audio-stream of a video-file to a wav-file before initializing encoding. To try this out in the demo some checkboxes have been added.
 

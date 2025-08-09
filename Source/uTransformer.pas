@@ -75,7 +75,8 @@ uses
   WinApi.MediaFoundationApi.MfIdl,
   WinApi.WinMM.MMeApi,
   WinApi.ActiveX.PropVarUtil,
-  WinApi.WinApiTypes;
+  WinApi.WinApiTypes,
+  WinApi.MediaFoundationApi.Mferror;
 
 const
   Msg_Audio = WM_User + 2;
@@ -156,20 +157,79 @@ function SetTimerResolution(
   var SetResolution: UInt32)
   : HResult;
 
+function GetAudioDuration(const Filename: string)
+  : int64;
+
+// MaxDuration=0 saves the complete stream
 function SaveAudioStreamAsWav(
   const InputFileName:  string;
-  const OutputFilename: string)
+  const OutputFilename: string;
+  MaxDuration:          int64)
   : boolean;
 
 implementation
 
+function GetAudioDuration(const Filename: string)
+  : int64;
+var pReader: IMFSourceReader;
+  count: integer;
+  err: string;
+  hrCoInit, hrStartUp: HResult;
+  _var: TPropVariant;
+const
+  ProcName = 'GetAudioDuration';
+  procedure CheckFail(hr: HResult);
+  begin
+    inc(count);
+    if not succeeded(hr) then
+    begin
+      err := '$' + IntToHex(hr, 8);
+      raise Exception.CreateFmt('Fail in call no. %d of %s with result %x',
+        [count, ProcName, hr]);
+    end;
+  end;
+
+begin
+  count := 0;
+  pReader := nil;
+  hrCoInit := E_Fail;
+  hrStartUp := E_Fail;
+  Result := 0;
+  try
+    hrCoInit := CoInitializeEx(
+      nil,
+      COINIT_APARTMENTTHREADED or
+      COINIT_DISABLE_OLE1DDE);
+    CheckFail(hrCoInit);
+
+    hrStartUp := MFStartup(MF_VERSION);
+    CheckFail(hrStartUp);
+
+    // Create a sourcereader for the audio file
+    CheckFail(MFCreateSourceReaderFromURL(PWideChar(Filename), nil,
+      pReader));
+    PropVariantInit(_var);
+    CheckFail(pReader.GetPresentationAttribute(MF_SOURCE_READER_MEDIASOURCE,
+      MF_PD_DURATION, _var));
+    CheckFail(PropVariantToInt64(_var, Result));
+    PropVariantClear(_var);
+  finally
+    if succeeded(hrStartUp) then
+      MfShutDown();
+    if succeeded(hrCoInit) then
+      CoUninitialize;
+  end;
+
+end;
+
 function SaveAudioStreamAsWav(
   const InputFileName:  string;
-  const OutputFilename: string)
+  const OutputFilename: string;
+  MaxDuration:          int64)
   : boolean;
 var
   hrCoInit, hrStartUp: HResult;
-  Count: integer;
+  count: integer;
   pSourceReader: IMFSourceReader;
   pAudioTypeNative, pPartialType, pAudioTypeIn: IMFMediaType;
   AudioStreamIndex, ActualStreamIndex: DWord;
@@ -190,12 +250,12 @@ var
   FirstAudioSample: boolean;
   SilenceBuffer: array of byte;
   SilenceBufferSize: DWord;
-
+  AudioTime: int64;
 const
   ProcName = 'SaveAudioStreamAsWav';
   procedure CheckFail(hr: HResult);
   begin
-    inc(Count);
+    inc(count);
     if not succeeded(hr) then
     begin
       if succeeded(hrStartUp) then
@@ -205,12 +265,12 @@ const
       hrStartUp := E_Fail;
       hrCoInit := E_Fail;
       raise Exception.CreateFmt('Fail in call no. %d of %s with result %x',
-        [Count, ProcName, hr]);
+        [count, ProcName, hr]);
     end;
   end;
 
 begin
-  Count := 0;
+  count := 0;
   Result := false;
   hrCoInit := CoInitializeEx(
     nil,
@@ -337,8 +397,9 @@ begin
           if AudioTimestamp > 0 then
           begin
             // pad beginning of data with silence
-            SilenceBufferSize := 4 * trunc(AudioSampleRate * AudioTimestamp /
-              1000 / 10000);
+            SilenceBufferSize :=
+              4 * trunc(1 / 1000 * 1 / 10000 * AudioSampleRate *
+              AudioTimestamp);
             if SilenceBufferSize > 1 then // otherwise pointless
             begin
               SetLength(
@@ -355,7 +416,9 @@ begin
               inc(
                 AudioBytesWritten,
                 SilenceBufferSize);
-              SetLength(SilenceBuffer,0);
+              SetLength(
+                SilenceBuffer,
+                0);
             end;
           end;
         end;
@@ -376,6 +439,13 @@ begin
         SafeRelease(pBuffer);
       end;
       SafeRelease(pAudioSample);
+      if MaxDuration > 0 then
+      begin
+        AudioTime := trunc(1 / 4 * AudioBytesWritten / AudioSampleRate * 1000);
+        // [ms]
+        if AudioTime >= MaxDuration then
+          AudioDone := true;
+      end;
     end; // while not AudioDone
 
     // Fill in the missing parts of the header
@@ -425,7 +495,7 @@ end;
 function GetVideoInfo(const VideoFileName: string)
   : TVideoInfo;
 var
-  Count: integer;
+  count: integer;
   GUID: TGUID;
   _var: TPropVariant;
   Num, Den: DWord;
@@ -445,17 +515,17 @@ const
   ProcName = 'GetVideoInfo';
   procedure CheckFail(hr: HResult);
   begin
-    inc(Count);
+    inc(count);
     if not succeeded(hr) then
     begin
       err := '$' + IntToHex(hr, 8);
       raise Exception.CreateFmt('Fail in call no. %d of %s with result %x',
-        [Count, ProcName, hr]);
+        [count, ProcName, hr]);
     end;
   end;
 
 begin
-  Count := 0;
+  count := 0;
   pReader := nil;
   hrCoInit := E_Fail;
   hrStartUp := E_Fail;
@@ -508,7 +578,7 @@ begin
     CheckFail(pReader.GetPresentationAttribute(MF_SOURCE_READER_MEDIASOURCE,
       MF_PD_DURATION, _var));
     CheckFail(PropVariantToInt64(_var, Result.Duration));
-    Result.DurationString := HnsTimeToStr(Result.Duration, false) + '[h:m:s]';
+    Result.DurationString := HnsTimeToStr(Result.Duration, false) + ' [h:m:s]';
     // Result.Duration := _var.hVal.QuadPart; Makes no difference.
     PropVariantClear(_var);
 
@@ -597,10 +667,10 @@ begin
       hr := pReader.GetNativeMediaType(AudioStreamNo, 0, pMediaTypeIn);
       if Failed(hr) then
       begin
-        err := IntToHex(
-          hr,
-          8); // MF_E_INVALIDSTREAMNUMBER
-        break;
+        if hr = MF_E_INVALIDSTREAMNUMBER then // we examined all streams
+          break
+        else
+          CheckFail(hr);
       end;
       CheckFail(pMediaTypeIn.GetMajorType(GUID));
       if GUID = MFMediaType_Audio then
@@ -661,23 +731,23 @@ constructor TVideoTransformer.Create(
   NewFrameRate:    single;
   FrameRateCap:    single);
 var
-  Count: integer;
+  count: integer;
   attribs: IMFAttributes;
   pPartialType: IMFMediaType;
 const
   ProcName = 'TVideoTransformer.Create';
   procedure CheckFail(hr: HResult);
   begin
-    inc(Count);
+    inc(count);
     if not succeeded(hr) then
     begin
       raise Exception.CreateFmt('Fail in call no. %d of %s with result %x',
-        [Count, ProcName, hr]);
+        [count, ProcName, hr]);
     end;
   end;
 
 begin
-  Count := 0;
+  count := 0;
   hrCoInit := E_Fail;
   hrStartUp := E_Fail;
   fInputFile := InputFile;
@@ -777,7 +847,7 @@ procedure TVideoTransformer.GetNextValidSample(
   out pSample:             IMFSample;
   out Timestamp, Duration: int64);
 var
-  Count: integer;
+  count: integer;
   pSampleLoc: IMFSample;
   flags: DWord;
   hr: HResult;
@@ -785,16 +855,16 @@ const
   ProcName = 'TVideoTransformer.GetNextValidSample';
   procedure CheckFail(hr: HResult);
   begin
-    inc(Count);
+    inc(count);
     if not succeeded(hr) then
     begin
       raise Exception.CreateFmt('Fail in call no. %d of %s with result %x',
-        [Count, ProcName, hr]);
+        [count, ProcName, hr]);
     end;
   end;
 
 begin
-  Count := 0;
+  count := 0;
   pSample := nil;
   if fEndOfFile then
     exit;
@@ -849,7 +919,7 @@ function TVideoTransformer.NextValidSampleToBitmap(
   out Timestamp, Duration: int64)
   : boolean;
 var
-  Count: integer;
+  count: integer;
   pSample: IMFSample;
   pBuffer: IMFMediaBuffer;
   Stride: integer;
@@ -859,11 +929,11 @@ const
   ProcName = 'TVideoTransformer.NextValidSampleToBitmap';
   procedure CheckFail(hr: HResult);
   begin
-    inc(Count);
+    inc(count);
     if not succeeded(hr) then
     begin
       raise Exception.CreateFmt('Fail in call no. %d of %s with result %x',
-        [Count, ProcName, hr]);
+        [count, ProcName, hr]);
     end;
   end;
 
@@ -871,7 +941,7 @@ begin
   Result := false;
   if fEndOfFile then
     exit;
-  Count := 0;
+  count := 0;
   GetNextValidSample(
     pSample,
     Timestamp,
@@ -928,24 +998,24 @@ end;
 function TVideoTransformer.Seek(VideoTime: int64)
   : boolean;
 var
-  Count: integer;
+  count: integer;
   err: string;
   var_: PropVariant;
 const
   ProcName = 'TVideoTransformer.Seek';
   procedure CheckFail(hr: HResult);
   begin
-    inc(Count);
+    inc(count);
     if not succeeded(hr) then
     begin
       err := '$' + IntToHex(hr, 8);
       raise Exception.CreateFmt('Fail in call no. %d of %s with result %x',
-        [Count, ProcName, hr]);
+        [count, ProcName, hr]);
     end;
   end;
 
 begin
-  Count := 0;
+  count := 0;
   Result := (VideoTime < fVideoInfo.Duration);
   if Result then
   begin
