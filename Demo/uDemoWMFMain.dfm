@@ -425,7 +425,7 @@ object DemoWMFMain: TDemoWMFMain
             Left = 0
             Top = 0
             Width = 771
-            Height = 207
+            Height = 217
             Align = alTop
             BevelOuter = bvNone
             TabOrder = 0
@@ -501,7 +501,7 @@ object DemoWMFMain: TDemoWMFMain
             end
             object Background: TCheckBox
               Left = 24
-              Top = 168
+              Top = 160
               Width = 241
               Height = 34
               Caption = 'Run in background thread'
@@ -510,7 +510,7 @@ object DemoWMFMain: TDemoWMFMain
             end
             object CropLandscape: TCheckBox
               Left = 24
-              Top = 76
+              Top = 72
               Width = 241
               Height = 34
               Caption = 'Crop landscape images to video size'
@@ -520,7 +520,7 @@ object DemoWMFMain: TDemoWMFMain
             end
             object ZoomInOut: TCheckBox
               Left = 24
-              Top = 102
+              Top = 98
               Width = 241
               Height = 34
               Caption = 'Include ZoomInOut-transitions'
@@ -529,7 +529,7 @@ object DemoWMFMain: TDemoWMFMain
             end
             object DebugTiming: TCheckBox
               Left = 24
-              Top = 134
+              Top = 128
               Width = 241
               Height = 34
               Caption = 'Debug Timing (Displays encoded timestamp in seconds)'
@@ -634,21 +634,29 @@ object DemoWMFMain: TDemoWMFMain
                 'AAC (Normal for .mp4)'
                 'FLAC (Lossless compression)')
             end
+            object MonitorMemory: TCheckBox
+              Left = 24
+              Top = 194
+              Width = 183
+              Height = 17
+              Caption = 'Monitor memory usage'
+              TabOrder = 13
+            end
           end
           object Stats: TMemo
             Left = 394
             Top = 188
             Width = 337
             Height = 81
-            Anchors = [akLeft, akBottom]
+            Anchors = [akLeft, akTop, akBottom]
             Lines.Strings = (
               'Stats')
             ScrollBars = ssVertical
             TabOrder = 1
           end
           object WriteSlideshow: TButton
-            Left = 24
-            Top = 218
+            Left = 25
+            Top = 227
             Width = 269
             Height = 38
             Anchors = [akLeft, akBottom]
@@ -664,8 +672,8 @@ object DemoWMFMain: TDemoWMFMain
             OnClick = WriteSlideshowClick
           end
           object Button8: TButton
-            Left = 304
-            Top = 216
+            Left = 300
+            Top = 227
             Width = 75
             Height = 39
             Anchors = [akLeft, akBottom]

@@ -256,7 +256,7 @@ function BSpline(x: double): double; inline;
 begin
   x := abs(x);
   if x < 0.5 then
-    Result := 8 * x * x * (x - 1) + 4 / 3
+    Result := 8 * sqr(x)* (x - 1) + 4 / 3
   else if x < 1 then
     Result := 8 / 3 * sqr(1 - x) * (1 - x)
   else
@@ -289,9 +289,9 @@ function Bicubic(x: double): double; inline;
 begin
   x := abs(x);
   if x < 1 / 2 then
-    Result := 4 * (ac + 8) * x * x * x - 2 * (ac + 12) * x * x + 2
+    Result := sqr(x)*(4 * (ac + 8) * x  - 2 * (ac + 12)) + 2
   else if x < 1 then
-    Result := 2 * ac * (2 * x * x * x - 5 * x * x + 4 * x - 1)
+    Result := 2 * ac * (sqr(x)*(2 * x - 5 ) + 4 * x - 1)
   else
     Result := 0;
 end;
@@ -320,68 +320,91 @@ end;
 // Thanks to Kas Ob. for suggesting them in https://en.delphipraxis.net/
 const
   C_M = 1 / 3;
-
+  A1_M = 8 + 32 * C_M;
+  A2_M = - (8 + 24 * C_M);
+  A3_M = 4 / 3 + 4 / 3 * C_M;
+  A4_M = -(8 / 3 + 32 / 3 * C_M);
+  A5_M = 8 + 24 * C_M;
+  A6_M = - (8 + 16 * C_M);
+  A7_M = 8 / 3 + 8 / 3 * C_M;
+//
   // Mitchell filter used by ImageMagick
 function Mitchell(x: double): double; inline;
 begin
   x := abs(x);
   if x < 0.5 then
-    Result := (8 + 32 * C_M) * x * x * x - (8 + 24 * C_M) * x * x + 4 / 3 +
-      4 / 3 * C_M
+    Result := sqr(x)*(A1_M * x + A2_M) + A3_M
   else if x < 1 then
-    Result := -(8 / 3 + 32 / 3 * C_M) * x * x * x + (8 + 24 * C_M) * x * x -
-      (8 + 16 * C_M) * x + 8 / 3 + 8 / 3 * C_M
+    Result := sqr(x)*(A4_M * x + A5_M)  + A6_M * x + A7_M
   else
     Result := 0;
 end;
+
 
 const
   C_R = 0.3109;
-
+  A1_R = 8 + 32 * C_R;
+  A2_R = - (8 + 24 * C_R);
+  A3_R = 4 / 3 + 4 / 3 * C_R;
+  A4_R = -(8 / 3 + 32 / 3 * C_R);
+  A5_R = 8 + 24 * C_R;
+  A6_R = - (8 + 16 * C_R);
+  A7_R = 8 / 3 + 8 / 3 * C_R;
+//
   // Robidoux filter
 function Robidoux(x: double): double; inline;
 begin
-  x := abs(x);
+ x := abs(x);
   if x < 0.5 then
-    Result := (8 + 32 * C_R) * x * x * x - (8 + 24 * C_R) * x * x + 4 / 3 +
-      4 / 3 * C_R
+    Result := sqr(x)*(A1_R * x + A2_R) + A3_R
   else if x < 1 then
-    Result := -(8 / 3 + 32 / 3 * C_R) * x * x * x + (8 + 24 * C_R) * x * x -
-      (8 + 16 * C_R) * x + 8 / 3 + 8 / 3 * C_R
+    Result := sqr(x)*(A4_R * x + A5_R)  + A6_R * x + A7_R
   else
     Result := 0;
 end;
 
+
 const
   C_RS = 0.3690;
-
-  // Robidoux-Sharp filter
+  A1_RS = 8 + 32 * C_RS;
+  A2_RS = - (8 + 24 * C_RS);
+  A3_RS = 4 / 3 + 4 / 3 * C_RS;
+  A4_RS = -(8 / 3 + 32 / 3 * C_RS);
+  A5_RS = 8 + 24 * C_RS;
+  A6_RS = - (8 + 16 * C_RS);
+  A7_RS = 8 / 3 + 8 / 3 * C_RS;
+//
+//  // Robidoux-Sharp filter
 function RobidouxSharp(x: double): double; inline;
 begin
   x := abs(x);
   if x < 0.5 then
-    Result := (8 + 32 * C_RS) * x * x * x - (8 + 24 * C_RS) * x * x + 4 / 3 + 4
-      / 3 * C_RS
+    Result := sqr(x)*(A1_RS * x + A2_RS) + A3_RS
   else if x < 1 then
-    Result := -(8 / 3 + 32 / 3 * C_RS) * x * x * x + (8 + 24 * C_RS) * x * x -
-      (8 + 16 * C_RS) * x + 8 / 3 + 8 / 3 * C_RS
+    Result := sqr(x)*(A4_RS * x + A5_RS)  + A6_RS * x + A7_RS
   else
     Result := 0;
 end;
 
+
 const
   C_RD = 0.1602;
-
+  A1_RD = 8 + 32 * C_RD;
+  A2_RD = - (8 + 24 * C_RD);
+  A3_RD = 4 / 3 + 4 / 3 * C_RD;
+  A4_RD = -(8 / 3 + 32 / 3 * C_RD);
+  A5_RD = 8 + 24 * C_RD;
+  A6_RD = - (8 + 16 * C_RD);
+  A7_RD = 8 / 3 + 8 / 3 * C_RD;
+//
   // Robidoux-Soft filter
 function RobidouxSoft(x: double): double; inline;
 begin
   x := abs(x);
   if x < 0.5 then
-    Result := (8 + 32 * C_RD) * x * x * x - (8 + 24 * C_RD) * x * x + 4 / 3 + 4
-      / 3 * C_RD
+    Result := sqr(x)*(A1_RD * x + A2_RD) + A3_RD
   else if x < 1 then
-    Result := -(8 / 3 + 32 / 3 * C_RD) * x * x * x + (8 + 24 * C_RD) * x * x -
-      (8 + 16 * C_RD) * x + 8 / 3 + 8 / 3 * C_RD
+    Result := sqr(x)*(A4_RD * x + A5_RD)  + A6_RD * x + A7_RD
   else
     Result := 0;
 end;

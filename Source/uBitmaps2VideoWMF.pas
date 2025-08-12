@@ -58,6 +58,7 @@ uses
   WinApi.ActiveX,
   WinApi.Messages,
   WinApi.MMSystem,
+  PsAPI,
 
   System.SysUtils,
   System.Types,
@@ -131,7 +132,7 @@ const
     DisableQualityBasedEncoding: false;
     ForceEncoderLevel: false;
     DisableGOPSize: false;
-    //Get as many processors as possible to do the resampling
+    // Get as many processors as possible to do the resampling
     ResamplingThreadsLimit: 16
     );
 
@@ -166,6 +167,7 @@ type
 
     fVideoTime: int64;
     fFrameCount: int64;
+    fBrake: DWord;
     fThreadPool: TResamplingThreadPool;
     fFilter: TFilter;
     fTimingDebug: boolean;
@@ -180,7 +182,7 @@ type
 
     // Move the RGBA-pixels into an MF sample buffer
     procedure bmRGBAToSampleBuffer(
-      const bm:       TBitmap;
+      const bm:      TBitmap;
       aSampleBuffer: IMFMediaBuffer);
 
     // Resize/crop bm to input format for the encoder.
@@ -203,7 +205,7 @@ type
     // Initialize the audio-sourcereader and add an audiostream with the desired encoding to the sinkwriter
     procedure InitAudio(
       const AudioFileName:                        string;
-      AudioCodec: TAudioCodecId;
+      AudioCodec:                                 TAudioCodecID;
       AudioSampleRate, AudioBitrate, StreamIndex: DWord);
 
     function WriteSilence(
@@ -369,6 +371,8 @@ procedure TranscodeVideoFile(
   ConvertToWav:                        boolean = false;
   OnProgress:                          TBitmapEncoderProgressEvent = nil);
 
+function CurrentProcessMemory: NativeUInt;
+
 implementation
 
 uses VCL.Forms;
@@ -415,7 +419,7 @@ begin
       Quality,
       NewFrameRate,
       Codec,
-      cfBilinear,
+      cfBicubic,
       audiofile,
       AAC,
       192,
@@ -476,7 +480,7 @@ begin
 end;
 
 // translation of our codec-enumeration to MF-constants
-function GetAudioFormat(Id: TAudioCodecId)
+function GetAudioFormat(Id: TAudioCodecID)
   : TGUID;
 begin
   case Id of
@@ -752,6 +756,8 @@ begin
 
   stride := 4 * fVideoWidth;
 
+  fBrake := round(108000 / fVideoHeight);
+
   hrCoInit := CoInitializeEx(
     nil,
     COINIT_APARTMENTTHREADED or
@@ -929,7 +935,7 @@ procedure TBitmapEncoderWMF.InitAudio(
   const
   AudioFileName:
   string;
-  AudioCodec: TAudioCodecId;
+  AudioCodec:                                 TAudioCodecID;
   AudioSampleRate, AudioBitrate, StreamIndex: DWord);
 var
   _var: TPropVariant;
@@ -971,7 +977,8 @@ begin
   CheckFail(MFCreateMediaType(pAudioTypeOut));
 
   CheckFail(pAudioTypeOut.SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio));
-  CheckFail(pAudioTypeOut.SetGUID(MF_MT_SUBTYPE, GetAudioFormat(AudioCodec)));//MFAudioFormat_AAC));
+  CheckFail(pAudioTypeOut.SetGUID(MF_MT_SUBTYPE, GetAudioFormat(AudioCodec)));
+  // MFAudioFormat_AAC));
   // set the number of audio bits per sample. This must be 16 according to docs.
   CheckFail(pAudioTypeOut.SetUINT32(MF_MT_AUDIO_BITS_PER_SAMPLE, 16));
   // set the number of audio samples per second. Must be 44100 or 48000
@@ -985,9 +992,9 @@ begin
   // set the block alignment of the samples. Hardwired to 4.
   CheckFail(pAudioTypeOut.SetUINT32(MF_MT_AUDIO_BLOCK_ALIGNMENT, 4));
   // Level 2 profile
-  if AudioCodec=AAC then
-  CheckFail(pAudioTypeOut.SetUINT32(MF_MT_AAC_AUDIO_PROFILE_LEVEL_INDICATION,
-    Uint32($29)));
+  if AudioCodec = AAC then
+    CheckFail(pAudioTypeOut.SetUINT32(MF_MT_AAC_AUDIO_PROFILE_LEVEL_INDICATION,
+      Uint32($29)));
 
   // add a stream with this media type to the sink-writer
   CheckFail(pSinkWriter.AddStream(pAudioTypeOut, fSinkStreamIndexAudio));
@@ -1019,7 +1026,7 @@ begin
     fAudioSampleRate));
   CheckFail(pPartialType.SetUINT32(MF_MT_AUDIO_NUM_CHANNELS, 2));
   CheckFail(pPartialType.SetUINT32(MF_MT_ALL_SAMPLES_INDEPENDENT,
-  Uint32(true)));
+    Uint32(true)));
 
   // set the partial media type on the source stream
   // if this is successful, the reader can deliver uncompressed samples
@@ -1062,7 +1069,7 @@ begin
   // add Silence to fill any gap at the beginning of audio
   fFirstAudioFrame := true;
 
-  //Initialize audio-timestamps
+  // Initialize audio-timestamps
   fAudioTime := 0;
   fSilenceTime := 0;
 
@@ -1205,7 +1212,7 @@ begin
   begin
     bmBuf := TBitmap.Create;
     try
-      while fWriteStart < StartTime + ShowTime * 10000 do
+      while (fWriteStart < StartTime + ShowTime * 10000) and fInitialized do
       begin
 
         bmBuf.Assign(fBmRGBA);
@@ -1465,7 +1472,7 @@ begin
     StartTime := fWriteStart;
     EndTime := StartTime + EffectTime * 10000;
     fact := 255 / 10000 / EffectTime;
-    while EndTime - fWriteStart > 0 do
+    while (EndTime - fWriteStart > 0) and fInitialized do
     begin
       alpha := round((fact * (fWriteStart - StartTime)));
       Alphablend(
@@ -1561,12 +1568,12 @@ var
   flags: DWord;
   AudioTimestamp, AudioSampleDuration: int64;
   pAudioSample: IMFSample;
-//  pBuffer: IMFMediaBuffer;
-//  pData: pByte;
+  // pBuffer: IMFMediaBuffer;
+  // pData: pByte;
   SilenceTime: int64;
 begin
   result := S_OK;
-  //pBuffer := nil;
+  // pBuffer := nil;
   pAudioSample := nil;
   AudioBufferSize := 0;
   // If audio is present write audio samples up to the Video-timestamp
@@ -1625,23 +1632,23 @@ begin
           end;
         end;
       end;
-      //Uncomment the following lines to investigate buffer size
-      //while debugging
+      // Uncomment the following lines to investigate buffer size
+      // while debugging
 
-//      result := pAudioSample.ConvertToContiguousBuffer(@pBuffer);
-//      if not succeeded(result) then
-//        exit;
-//
-//      result := pBuffer.Lock(
-//        pData,
-//        nil,
-//        @AudioBufferSize);
-//      if not succeeded(result) then
-//        exit;
-//
-//      result := pBuffer.Unlock;
-//      if not succeeded(result) then
-//        exit;
+      // result := pAudioSample.ConvertToContiguousBuffer(@pBuffer);
+      // if not succeeded(result) then
+      // exit;
+      //
+      // result := pBuffer.Lock(
+      // pData,
+      // nil,
+      // @AudioBufferSize);
+      // if not succeeded(result) then
+      // exit;
+      //
+      // result := pBuffer.Unlock;
+      // if not succeeded(result) then
+      // exit;
 
       result := pAudioSample.GetSampleDuration(@AudioSampleDuration);
       if not succeeded(result) then
@@ -1663,7 +1670,7 @@ begin
       // new end audio time written
       fAudioTime := AudioTimestamp + AudioSampleDuration;
 
-      //SafeRelease(pBuffer);
+      // SafeRelease(pBuffer);
     end;
     if fAudioTime > fAudioDuration then
       fAudioDone := true;
@@ -1673,6 +1680,25 @@ begin
     // since interfaces are automatically released,
     // but it fixes a memory leak when reading .mkv-files.
     SafeRelease(pAudioSample);
+  end;
+end;
+
+function CurrentProcessMemory: NativeUInt;
+var
+  MemCounters: TProcessMemoryCounters;
+  CallSuccess: boolean;
+begin
+  MemCounters.cb := SizeOf(MemCounters);
+  CallSuccess := GetProcessMemoryInfo(
+    GetCurrentProcess,
+    @MemCounters,
+    SizeOf(MemCounters));
+  if CallSuccess then
+    result := MemCounters.WorkingSetSize
+  else
+  begin
+    result := 0;
+    RaiseLastOSError;
   end;
 end;
 
@@ -1749,9 +1775,9 @@ begin
     hr := MFCreateSample(pSample);
 
   if succeeded(hr) then
-  hr := MFCreateMemoryBuffer(
-    fBufferSizeVideo,
-    pSampleBufferLoc);
+    hr := MFCreateMemoryBuffer(
+      fBufferSizeVideo,
+      pSampleBufferLoc);
 
   if succeeded(hr) then
     bmRGBAToSampleBuffer(
@@ -1782,30 +1808,36 @@ begin
   // Throw excepton if failed
   CheckFail(hr);
 
-  SafeRelease(pSampleBufferLoc);
-
   inc(fFrameCount);
   // Timestamp for the next frame
   // Adjust fWriteStart to "exact" frame-time boundaries. Improves timing.
   fWriteStart := Trunc(fFrameCount * fExactSampleDuration);
   fVideoTime := fWriteStart div 10000;
 
-  // give the encoder-threads a chance to do their work
-  HandleMessages(GetCurrentThread());
-  Sleep(0);
+  // Not a good idea.
+  // HandleMessages(GetCurrentThread());
+  // Sleep(0);
+
+  if CurrentProcessMemory > 768 * 1024 * 1024 then // 0.75 GB
+    // drain the bucket
+    while GetEncodingStats.dwByteCountQueued > fBufferSizeVideo do
+      sleep(1);
 
   if fFrameCount mod 30 = 1 then
+  begin
     if Assigned(fOnProgress) then
     begin
       DoAbort := false;
-      fOnProgress(
-        self,
-        fFrameCount,
-        fVideoTime,
-        DoAbort);
+          fOnProgress(
+            self,
+            fFrameCount,
+            fVideoTime,
+            DoAbort);
       if DoAbort then
         Finalize;
     end;
+  end;
+  SafeRelease(pSampleBufferLoc);
 end;
 
 function Interpolate(
@@ -1886,7 +1918,7 @@ begin
     StartTime := fWriteStart;
     EndTime := StartTime + EffectTime * 10000;
     fact := 1 / 10000 / EffectTime;
-    while EndTime - fWriteStart > 0 do
+    while (EndTime - fWriteStart > 0) and fInitialized do
     begin
       t := fact * (fWriteStart - StartTime);
       ZoomTweenSource := Interpolate(_FullZoom, ZoomSource, t)
@@ -1945,19 +1977,13 @@ begin
     exit;
   StartTime := fWriteStart;
   EndTime := StartTime + EffectTime * 10000;
-  while fWriteStart < EndTime - fSampleDuration do
+  while (fWriteStart < EndTime) and fInitialized do
   begin
-
     WriteOneFrame(
       fWriteStart,
       fSampleDuration);
 
   end;
-  // Force the last one to be a keyframe (?) It compiles and runs, but does it work?
-  WriteOneFrame(
-    fWriteStart,
-    fSampleDuration); //,true);
-
 end;
 
 function TBitmapEncoderWMF.GetAudioDuration: int64;
@@ -1993,7 +2019,6 @@ begin
   else
     result := fLastEncodingStats;
 end;
-
 
 initialization
 

@@ -35,6 +35,7 @@ interface
 uses
   WinApi.Windows,
   WinApi.Wincodec,
+  WinApi.Messages,
   System.Types,
   VCL.Graphics,
   uScaleWMF,
@@ -46,6 +47,12 @@ procedure WICToBmp(const aWic: TWICImage; const aBmp: TBitmap);
 /// Resizes Source to Target so Target fits into aRect aspect-preserving. DisplayRect is the subrect of aRect for centered display.
 /// Returns false if resizing is not possible.
 function MaximizeToRect(const Source:TBitmap; const Target: TBitmap; aRect: TRect; var DisplayRect: TRect): boolean;
+
+//procedure HandleMessagesNew(AThread: THandle;
+//                         AWait: Cardinal = INFINITE);
+
+
+
 
 implementation
 
@@ -85,9 +92,30 @@ end;
 
 function MaximizeToRect(const Source:TBitmap; const Target: TBitmap; aRect: TRect; var DisplayRect: TRect): boolean;
 begin
-  uScaleWMF.MaximizeToRect(aRect,DisplayRect,Source,Target,cfBicubic,0,true);
+  uScaleWMF.MaximizeToRect(aRect,DisplayRect,Source,Target,cfRobidoux,0,true);
   Result:=true;
 end;
+
+//procedure HandleMessagesNew(AThread: THandle;
+//                         AWait: Cardinal = INFINITE);
+//var
+//  pMsg: TMsg;
+//begin
+//  while (MsgWaitForMultipleObjects(1,
+//                                   AThread,
+//                                   False,
+//                                   AWait,
+//                                   QS_ALLINPUT) = WAIT_OBJECT_0 + 1) do
+//    begin
+//      if PeekMessage(pMsg, 0, 0, 0, PM_REMOVE) then    // if there is a message then it will be removed/extracted
+//      begin
+//        if pMsg.Message = WM_QUIT then
+//          Exit;
+//        TranslateMessage(pMsg);
+//        DispatchMessage(pMsg);
+//      end;
+//    end;
+//end;
 
 
 

@@ -1,3 +1,6 @@
+2025-08-12
+Limited intermittent memory usage by draining bytes queued up for the encoder, if used memory gets close to 1GB. Without that encoding large video sizes can well lead to out of memory or out of resources - errors. Fixed code which responds to abortion of encoding. Avoided use of HandleMessages. 
+
 2025-08-09
 Fixed the root of all video-stuttering and timing issues. Hardware-encoding got faster. No more need to alter the timer-resolution or to put sleeps all over the code. Parameter EncodePriority no longer necessary.
 
